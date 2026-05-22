@@ -1,0 +1,43 @@
+import uuid
+from datetime import datetime
+from pydantic import BaseModel, EmailStr, field_validator
+from app.models.user import UserRole
+
+
+# --- Input Schemas (what the client sends) ---
+
+class UserCreate(BaseModel):
+    """Schema for registering a new user."""
+    name: str
+    email: EmailStr          # Pydantic validates this is a real email format
+    password: str
+    role: UserRole = UserRole.student  # defaults to student if not provided
+
+    @field_validator("password")
+    @classmethod
+    def password_must_be_strong(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        return v
+
+
+class UserLogin(BaseModel):
+    """Schema for logging in."""
+    email: EmailStr
+    password: str
+
+
+# --- Output Schemas (what the API returns) ---
+
+class UserResponse(BaseModel):
+    """Schema for returning user data — never includes password."""
+    id: uuid.UUID
+    name: str
+    email: str
+    role: UserRole
+    is_active: bool
+    created_at: datetime
+
+    # This tells Pydantic to read data from SQLAlchemy model attributes
+    # Without this, Pydantic wouldn't know how to convert an ORM object to JSON
+    model_config = {"from_attributes": True}

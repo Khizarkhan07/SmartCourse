@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: smartcourse_postgres
+    environment:
+      POSTGRES_USER: smartcourse_user
+      POSTGRES_PASSWORD: smartcourse_pass
+      POSTGRES_DB: smartcourse_db
+    ports:
+      - "5433:5432"      # host_port:container_port (5433 avoids conflict with local postgres)
+    volumes:
+      - postgres_data:/var/lib/postgresql/data   # persist data between restarts
+
+volumes:
+  postgres_data:

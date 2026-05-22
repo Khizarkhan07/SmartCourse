@@ -1,0 +1,97 @@
+import uuid
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from fastapi import HTTPException, status
+
+from app.models.course import Course, CourseStatus
+from app.models.user import User, UserRole
+from app.schemas.course import CourseCreate, CourseUpdate
+
+
+async def create_course(db: AsyncSession, data: CourseCreate, instructor_id: uuid.UUID) -> Course:
+    """
+    Create a new course.
+    - Verifies the instructor exists and has the instructor role
+    - Course starts as 'draft' — publishing is a separate workflow (Week 2)
+    """
+    # Verify the instructor exists and is actually an instructor
+    result = await db.execute(select(User).where(User.id == instructor_id))
+    instructor = result.scalar_one_or_none()
+
+    if not instructor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Instructor not found",
+        )
+
+    if instructor.role != UserRole.instructor:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only users with the instructor role can create courses",
+        )
+
+    new_course = Course(
+        title=data.title,
+        description=data.description,
+        instructor_id=instructor_id,
+        status=CourseStatus.draft,   # always starts as draft
+    )
+
+    db.add(new_course)
+    await db.commit()
+    await db.refresh(new_course)
+    return new_course
+
+
+async def get_course_by_id(db: AsyncSession, course_id: uuid.UUID) -> Course:
+    """Fetch a single course by ID. Raises 404 if not found."""
+    result = await db.execute(select(Course).where(Course.id == course_id))
+    course = result.scalar_one_or_none()
+
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found",
+        )
+    return course
+
+
+async def list_courses(db: AsyncSession, limit: int = 20, offset: int = 0) -> list[Course]:
+    """Return active courses with pagination. Default page size is 20."""
+    result = await db.execute(
+        select(Course)
+        .where(Course.is_active == True)  # noqa: E712
+        .limit(limit)
+        .offset(offset)
+    )
+    return list(result.scalars().all())
+
+
+async def update_course(
+    db: AsyncSession,
+    course_id: uuid.UUID,
+    instructor_id: uuid.UUID,
+    data: CourseUpdate,
+) -> Course:
+    """
+    Update a course.
+    - Only the instructor who owns the course can update it
+    """
+    course = await get_course_by_id(db, course_id)
+
+    # Ownership check — instructor can only edit their own courses
+    if course.instructor_id != instructor_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only update your own courses",
+        )
+
+    # Only update fields that were actually sent (not None)
+    # This is what makes PATCH different from PUT
+    update_data = data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(course, field, value)
+
+    await db.commit()
+    await db.refresh(course)
+    return course

@@ -1,0 +1,18 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Environment
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+
+# Docker
+*.log
