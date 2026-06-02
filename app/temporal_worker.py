@@ -1,11 +1,4 @@
 """
-Temporal Worker — runs workflows and activities.
-
-The worker is a long-running process that:
-1. Connects to the Temporal server
-2. Registers which workflows and activities it can handle
-3. Listens on a task queue for work
-4. Executes tasks as they arrive
 
 Run this with:
     python -m app.temporal_worker
@@ -18,9 +11,13 @@ from temporalio.client import Client
 from temporalio.worker import Worker
 
 from app.workflows.hello_workflow import HelloWorldWorkflow, say_hello, send_welcome_email
-
-# Task queue name — FastAPI will use this same name when starting workflows
-TASK_QUEUE = "smartcourse-queue"
+from app.workflows.enrollment_workflow import (
+    EnrollmentWorkflow,
+    validate_enrollment_activity,
+    create_enrollment_activity,
+    send_enrollment_email_activity,
+)
+from app.temporal_client import TASK_QUEUE  # single source of truth
 
 
 async def main():
@@ -29,18 +26,22 @@ async def main():
 
     print(f"✅ Connected to Temporal server")
     print(f"📋 Listening on task queue: '{TASK_QUEUE}'")
-    print(f"🔄 Registered workflows: HelloWorldWorkflow")
-    print(f"⚡ Registered activities: say_hello, send_welcome_email")
+    print(f"🔄 Registered workflows: HelloWorldWorkflow, EnrollmentWorkflow")
+    print(f"⚡ Registered activities: say_hello, send_welcome_email,")
+    print(f"                          validate_enrollment, create_enrollment, send_enrollment_email")
     print(f"\nWaiting for tasks... (Ctrl+C to stop)\n")
 
-    # Start the worker
-    # workflows = list of workflow classes this worker handles
-    # activities = list of activity functions this worker handles
     async with Worker(
         client,
         task_queue=TASK_QUEUE,
-        workflows=[HelloWorldWorkflow],
-        activities=[say_hello, send_welcome_email],
+        workflows=[HelloWorldWorkflow, EnrollmentWorkflow],
+        activities=[
+            say_hello,
+            send_welcome_email,
+            validate_enrollment_activity,
+            create_enrollment_activity,
+            send_enrollment_email_activity,
+        ],
     ):
         await asyncio.Future()  # run forever until Ctrl+C
 

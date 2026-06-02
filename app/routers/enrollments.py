@@ -1,12 +1,16 @@
 import uuid
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from temporalio.client import WorkflowFailureError
+
 
 from app.database import get_db
 from app.schemas.enrollment import EnrollmentCreate, EnrollmentResponse
 from app.services import enrollment_service
 from app.auth import get_current_user, require_role
 from app.models.user import User, UserRole
+from app.temporal_client import get_temporal_client, TASK_QUEUE
+from app.workflows.enrollment_workflow import EnrollmentWorkflow, EnrollmentWorkflowInput
 
 router = APIRouter(prefix="/enrollments", tags=["Enrollments"])
 
@@ -18,13 +22,43 @@ async def enroll_in_course(
     current_user: User = Depends(require_role(UserRole.student)),
 ):
     """
-    Enroll the current student in a course.
-    Idempotent: calling this twice returns the same enrollment.
-    Only students can enroll.
+    Enroll the current student in a course via a Temporal workflow.
+
+    The workflow runs 3 durable steps:
+      1. Validate — course is published, not already enrolled
+      2. Create   — write enrollment row to DB
+      3. Email    — send welcome email (retried automatically on failure)
+
+    Idempotent: same student + course = same workflow ID, Temporal returns
+    the existing result without re-running.
     """
-    # Force student_id to be the authenticated user — client cannot enroll on behalf of others
-    data.student_id = current_user.id
-    return await enrollment_service.create_enrollment(db, data)
+    # Build a deterministic workflow ID — re-submitting the same enrollment
+    # returns the existing result instead of creating a duplicate
+    workflow_id = f"enroll-{str(current_user.id)[:8]}-{str(data.course_id)[:8]}"
+
+    client = await get_temporal_client()
+
+    try:
+        result = await client.execute_workflow(
+            EnrollmentWorkflow.run,
+            EnrollmentWorkflowInput(
+                student_id=str(current_user.id),
+                course_id=str(data.course_id),
+                student_email=current_user.email,
+            ),
+            id=workflow_id,
+            task_queue=TASK_QUEUE,
+        )
+    except WorkflowFailureError as e:
+        # Workflow failed due to a business rule violation (non_retryable ApplicationError)
+        # e.g. course not published, already enrolled
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e.cause),
+        )
+
+    # Fetch the full enrollment with nested student + course for the response schema
+    return await enrollment_service.get_enrollment(db, uuid.UUID(result["enrollment_id"]))
 
 
 @router.get("/", response_model=list[EnrollmentResponse])
