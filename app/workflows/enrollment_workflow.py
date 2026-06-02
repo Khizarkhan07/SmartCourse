@@ -21,11 +21,10 @@ class EnrollmentWorkflowInput:
 @activity.defn
 async def validate_enrollment_activity(student_id: str, course_id: str) -> None:
    
-    from sqlalchemy import select
     from temporalio.exceptions import ApplicationError
 
     from app.database import AsyncSessionLocal
-    from app.models import Course, CourseStatus, Enrollment
+    from app.models import Course, CourseStatus
 
     async with AsyncSessionLocal() as db:
         # Check course exists and is published
@@ -37,34 +36,35 @@ async def validate_enrollment_activity(student_id: str, course_id: str) -> None:
                 f"Course '{course.title}' is not published", non_retryable=True
             )
 
-        # Check for duplicate enrollment
-        existing = await db.execute(
-            select(Enrollment).where(
-                (Enrollment.student_id == uuid.UUID(student_id))
-                & (Enrollment.course_id == uuid.UUID(course_id))
-            )
-        )
-        if existing.scalar_one_or_none():
-            raise ApplicationError(
-                f"Student {student_id} is already enrolled in course {course_id}",
-                non_retryable=True,
-            )
-
     print(f"[Activity] ✅ Validation passed for student {student_id} → course {course_id}")
 
 
 @activity.defn
 async def create_enrollment_activity(student_id: str, course_id: str) -> str:
     """
-    DB write — creates the enrollment row and returns the new enrollment ID.
+    Idempotent DB write — returns existing enrollment ID if already enrolled,
+    creates a new row otherwise.
 
-    Returns the UUID string of the created enrollment so the workflow
-    can include it in its final result.
+    This is the idempotency guarantee: calling this twice with the same
+    student+course always returns the same enrollment_id.
     """
+    from sqlalchemy import select
     from app.database import AsyncSessionLocal
     from app.models import Enrollment
 
     async with AsyncSessionLocal() as db:
+        # Check for existing enrollment first
+        result = await db.execute(
+            select(Enrollment).where(
+                (Enrollment.student_id == uuid.UUID(student_id))
+                & (Enrollment.course_id == uuid.UUID(course_id))
+            )
+        )
+        existing = result.scalar_one_or_none()
+        if existing:
+            print(f"[Activity] ↩️  Already enrolled, returning existing: {existing.id}")
+            return str(existing.id)
+
         enrollment = Enrollment(
             student_id=uuid.UUID(student_id),
             course_id=uuid.UUID(course_id),

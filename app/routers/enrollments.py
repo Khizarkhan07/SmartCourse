@@ -2,6 +2,8 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from temporalio.client import WorkflowFailureError
+from temporalio.common import WorkflowIDReusePolicy
+from temporalio.exceptions import WorkflowAlreadyStartedError
 
 
 from app.database import get_db
@@ -48,13 +50,21 @@ async def enroll_in_course(
             ),
             id=workflow_id,
             task_queue=TASK_QUEUE,
+            id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE,
         )
+    except WorkflowAlreadyStartedError:
+        # Workflow already completed — return its stored result without re-running
+        handle = client.get_workflow_handle(workflow_id)
+        result = await handle.result()
     except WorkflowFailureError as e:
-        # Workflow failed due to a business rule violation (non_retryable ApplicationError)
-        # e.g. course not published, already enrolled
+        # Error chain: WorkflowFailureError → ActivityError → ApplicationError (our message)
+        # e.cause        = ActivityError  ("Activity task failed")
+        # e.cause.cause  = ApplicationError (the actual business rule message we raised)
+        inner = getattr(e.cause, "cause", e.cause)
+        message = getattr(inner, "message", str(inner))
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e.cause),
+            detail=message,
         )
 
     # Fetch the full enrollment with nested student + course for the response schema
