@@ -3,19 +3,19 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from temporalio.client import  WorkflowFailureError
+from temporalio.client import WorkflowFailureError
 from temporalio.common import WorkflowIDReusePolicy
-from temporalio.exceptions import WorkflowAlreadyStartedError
 from temporalio.exceptions import WorkflowAlreadyStartedError
 
 from app.database import get_db
 from app.models import Course
 from app.temporal_client import TASK_QUEUE, get_temporal_client
 from app.schemas.course import CourseResponse
-from app.services import course_publishing_service
 from app.auth import require_role
 from app.models.user import User, UserRole
 from app.workflows.publish_course_workflow import (
+    ArchiveCourseWorkflow,
+    ArchiveCourseWorkflowInput,
     PublishCourseWorkflow,
     PublishCourseWorkflowInput,
 )
@@ -79,4 +79,31 @@ async def archive_course(
     Archived courses are no longer visible to new students.
     Existing enrollments are unaffected.
     """
-    return await course_publishing_service.archive_course(db, course_id, current_user.id)
+    workflow_id = f"archive-{str(course_id)[:8]}"
+    client = await get_temporal_client()
+
+    try:
+        await client.execute_workflow(
+            ArchiveCourseWorkflow.run,
+            ArchiveCourseWorkflowInput(
+                course_id=str(course_id),
+                instructor_id=str(current_user.id),
+            ),
+            id=workflow_id,
+            task_queue=TASK_QUEUE,
+            id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE,
+        )
+    except WorkflowAlreadyStartedError:
+        handle = client.get_workflow_handle(workflow_id)
+        await handle.result()
+    except WorkflowFailureError as e:
+        inner = getattr(e.cause, "cause", e.cause)
+        message = getattr(inner, "message", str(inner))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
+    result = await db.execute(
+        select(Course)
+        .options(selectinload(Course.instructor))
+        .where(Course.id == course_id)
+    )
+    return result.scalar_one()

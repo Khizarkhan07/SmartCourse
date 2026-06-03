@@ -13,6 +13,12 @@ class PublishCourseWorkflowInput:
     instructor_id: str   # UUID as string
 
 
+@dataclass
+class ArchiveCourseWorkflowInput:
+    course_id: str       # UUID as string
+    instructor_id: str   # UUID as string
+
+
 # ACTIVITIES
 
 @activity.defn
@@ -73,6 +79,44 @@ async def validate_publish_activity(course_id: str, instructor_id: str) -> str:
 
 
 @activity.defn
+async def validate_archive_activity(course_id: str, instructor_id: str) -> str:
+    from temporalio.exceptions import ApplicationError
+
+    from app.database import AsyncSessionLocal
+    from app.models import Course
+    from app.models.course import CourseStatus
+
+    VALID_TRANSITIONS = {
+        CourseStatus.draft: [CourseStatus.published],
+        CourseStatus.published: [CourseStatus.archived],
+        CourseStatus.archived: [],
+    }
+
+    async with AsyncSessionLocal() as db:
+        course = await db.get(Course, uuid.UUID(course_id))
+
+        if not course:
+            raise ApplicationError(f"Course {course_id} not found", non_retryable=True)
+
+        if course.instructor_id != uuid.UUID(instructor_id):
+            raise ApplicationError(
+                "You can only archive your own courses", non_retryable=True
+            )
+
+        if CourseStatus.archived not in VALID_TRANSITIONS[course.status]:
+            raise ApplicationError(
+                f"Cannot archive a course with status '{course.status}'. "
+                f"Only published courses can be archived",
+                non_retryable=True,
+            )
+
+        course_title = course.title
+
+    print(f"[Activity] ✅ Archive validation passed for course '{course_title}'")
+    return course_title
+
+
+@activity.defn
 async def transition_course_status_activity(course_id: str, new_status: str) -> None:
     """
     DB write — transitions the course status.
@@ -125,6 +169,28 @@ async def notify_enrolled_students_activity(course_id: str, course_title: str) -
     return f"Notified {student_count} student(s) for course '{course_title}'"
 
 
+@activity.defn
+async def notify_course_archived_activity(course_id: str, course_title: str) -> str:
+    from sqlalchemy import select
+    from app.database import AsyncSessionLocal
+    from app.models import Enrollment, User
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(User.email)
+            .join(Enrollment, Enrollment.student_id == User.id)
+            .where(Enrollment.course_id == uuid.UUID(course_id))
+        )
+        student_emails = result.scalars().all()
+
+    for email in student_emails:
+        print(f"[Activity] 📧 Sending archive notification to {email} for '{course_title}'")
+
+    student_count = len(student_emails)
+    print(f"[Activity] ✅ Archive notification sent to {student_count} student(s)")
+    return f"Archive notification sent to {student_count} student(s) for course '{course_title}'"
+
+
 # ─────────────────────────────────────────────────────────
 # WORKFLOW
 # ─────────────────────────────────────────────────────────
@@ -171,6 +237,41 @@ class PublishCourseWorkflow:
         return {
             "course_id": input.course_id,
             "status": "published",
+            "course_title": course_title,
+            "notification": notification_result,
+        }
+
+
+@workflow.defn
+class ArchiveCourseWorkflow:
+    @workflow.run
+    async def run(self, input: ArchiveCourseWorkflowInput) -> dict:
+        course_title = await workflow.execute_activity(
+            validate_archive_activity,
+            args=[input.course_id, input.instructor_id],
+            start_to_close_timeout=timedelta(seconds=10),
+        )
+
+        await workflow.execute_activity(
+            transition_course_status_activity,
+            args=[input.course_id, "archived"],
+            start_to_close_timeout=timedelta(seconds=10),
+        )
+
+        notification_result = await workflow.execute_activity(
+            notify_course_archived_activity,
+            args=[input.course_id, course_title],
+            start_to_close_timeout=timedelta(seconds=30),
+            retry_policy=RetryPolicy(
+                initial_interval=timedelta(seconds=2),
+                backoff_coefficient=2.0,
+                maximum_attempts=3,
+            ),
+        )
+
+        return {
+            "course_id": input.course_id,
+            "status": "archived",
             "course_title": course_title,
             "notification": notification_result,
         }
