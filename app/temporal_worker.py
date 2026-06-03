@@ -17,6 +17,12 @@ from app.workflows.enrollment_workflow import (
     create_enrollment_activity,
     send_enrollment_email_activity,
 )
+from app.workflows.publish_course_workflow import (
+    PublishCourseWorkflow,
+    validate_publish_activity,
+    transition_course_status_activity,
+    notify_enrolled_students_activity,
+)
 from app.temporal_client import TASK_QUEUE  # single source of truth
 
 
@@ -26,21 +32,25 @@ async def main():
 
     print(f"✅ Connected to Temporal server")
     print(f"📋 Listening on task queue: '{TASK_QUEUE}'")
-    print(f"🔄 Registered workflows: HelloWorldWorkflow, EnrollmentWorkflow")
+    print(f"🔄 Registered workflows: HelloWorldWorkflow, EnrollmentWorkflow, PublishCourseWorkflow")
     print(f"⚡ Registered activities: say_hello, send_welcome_email,")
-    print(f"                          validate_enrollment, create_enrollment, send_enrollment_email")
+    print(f"                          validate_enrollment, create_enrollment, send_enrollment_email,")
+    print(f"                          validate_publish, transition_course_status, notify_enrolled_students")
     print(f"\nWaiting for tasks... (Ctrl+C to stop)\n")
 
     async with Worker(
         client,
         task_queue=TASK_QUEUE,
-        workflows=[HelloWorldWorkflow, EnrollmentWorkflow],
+        workflows=[HelloWorldWorkflow, EnrollmentWorkflow, PublishCourseWorkflow],
         activities=[
             say_hello,
             send_welcome_email,
             validate_enrollment_activity,
             create_enrollment_activity,
             send_enrollment_email_activity,
+            validate_publish_activity,
+            transition_course_status_activity,
+            notify_enrolled_students_activity,
         ],
     ):
         await asyncio.Future()  # run forever until Ctrl+C
