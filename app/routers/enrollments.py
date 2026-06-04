@@ -1,13 +1,13 @@
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from temporalio.client import WorkflowFailureError
 from temporalio.common import WorkflowIDReusePolicy
 from temporalio.exceptions import WorkflowAlreadyStartedError
 
 
 from app.database import get_db
-from app.schemas.enrollment import EnrollmentCreate, EnrollmentRequest, EnrollmentResponse
+from app.schemas.enrollment import EnrollmentRequest, EnrollmentResponse
+from app.schemas.operation import OperationAcceptedResponse
 from app.services import enrollment_service
 from app.auth import get_current_user, require_role
 from app.models.user import User, UserRole
@@ -17,10 +17,13 @@ from app.workflows.enrollment_workflow import EnrollmentWorkflow, EnrollmentWork
 router = APIRouter(prefix="/enrollments", tags=["Enrollments"])
 
 
-@router.post("/", response_model=EnrollmentResponse, status_code=201)
+@router.post(
+    "/",
+    response_model=OperationAcceptedResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def enroll_in_course(
     data: EnrollmentRequest,
-    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.student)),
 ):
     """
@@ -31,8 +34,10 @@ async def enroll_in_course(
       2. Create   — write enrollment row to DB
       3. Email    — send welcome email (retried automatically on failure)
 
-    Idempotent: same student + course = same workflow ID, Temporal returns
-    the existing result without re-running.
+    Idempotent: same student + course = same workflow ID.
+
+    Returns immediately with an operation ID so the client can poll
+    /operations/{id} instead of waiting for the workflow to finish.
     """
     # Build a deterministic workflow ID — re-submitting the same enrollment
     # returns the existing result instead of creating a duplicate
@@ -41,7 +46,7 @@ async def enroll_in_course(
     client = await get_temporal_client()
 
     try:
-        result = await client.execute_workflow(
+        await client.start_workflow(
             EnrollmentWorkflow.run,
             EnrollmentWorkflowInput(
                 student_id=str(current_user.id),
@@ -53,22 +58,13 @@ async def enroll_in_course(
             id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE,
         )
     except WorkflowAlreadyStartedError:
-        # Workflow already completed — return its stored result without re-running
-        handle = client.get_workflow_handle(workflow_id)
-        result = await handle.result()
-    except WorkflowFailureError as e:
-        # Error chain: WorkflowFailureError → ActivityError → ApplicationError (our message)
-        # e.cause        = ActivityError  ("Activity task failed")
-        # e.cause.cause  = ApplicationError (the actual business rule message we raised)
-        inner = getattr(e.cause, "cause", e.cause)
-        message = getattr(inner, "message", str(inner))
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=message,
-        )
+        pass
 
-    # Fetch the full enrollment with nested student + course for the response schema
-    return await enrollment_service.get_enrollment(db, uuid.UUID(result["enrollment_id"]))
+    return OperationAcceptedResponse(
+        operation_id=workflow_id,
+        status="accepted",
+        status_url=f"/operations/{workflow_id}",
+    )
 
 
 @router.get("/", response_model=list[EnrollmentResponse])
