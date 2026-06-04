@@ -10,6 +10,7 @@ Key concepts added:
 from datetime import timedelta
 from temporalio import activity, workflow
 from temporalio.common import RetryPolicy
+from app.temporal_client import NOTIFICATION_TASK_QUEUE
 
 
 # ─────────────────────────────────────────
@@ -83,6 +84,7 @@ class HelloWorldWorkflow:
             send_welcome_email,
             f"{name.lower()}@example.com",
             start_to_close_timeout=timedelta(seconds=30),
+            task_queue=NOTIFICATION_TASK_QUEUE,
             retry_policy=RetryPolicy(
                 initial_interval=timedelta(seconds=1),   # wait 1s before first retry
                 backoff_coefficient=2.0,                 # double wait each retry: 1s, 2s, 4s...

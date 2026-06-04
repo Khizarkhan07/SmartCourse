@@ -11,7 +11,7 @@ from app.schemas.operation import OperationAcceptedResponse
 from app.services import enrollment_service
 from app.auth import get_current_user, require_role
 from app.models.user import User, UserRole
-from app.temporal_client import get_temporal_client, TASK_QUEUE
+from app.temporal_client import ENROLLMENT_TASK_QUEUE, get_temporal_client
 from app.workflows.enrollment_workflow import EnrollmentWorkflow, EnrollmentWorkflowInput
 
 router = APIRouter(prefix="/enrollments", tags=["Enrollments"])
@@ -54,7 +54,7 @@ async def enroll_in_course(
                 student_email=current_user.email,
             ),
             id=workflow_id,
-            task_queue=TASK_QUEUE,
+            task_queue=ENROLLMENT_TASK_QUEUE,
             id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE,
         )
     except WorkflowAlreadyStartedError:

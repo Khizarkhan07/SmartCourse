@@ -5,6 +5,7 @@ from datetime import timedelta
 
 from temporalio import activity, workflow
 from temporalio.common import RetryPolicy
+from app.temporal_client import NOTIFICATION_TASK_QUEUE
 
 
 
@@ -143,6 +144,7 @@ class EnrollmentWorkflow:
             send_enrollment_email_activity,
             args=[input.student_email, "SmartCourse"],   # course title placeholder
             start_to_close_timeout=timedelta(seconds=30),
+            task_queue=NOTIFICATION_TASK_QUEUE,
             retry_policy=RetryPolicy(
                 initial_interval=timedelta(seconds=2),
                 backoff_coefficient=2.0,

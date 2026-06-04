@@ -6,7 +6,7 @@ from temporalio.exceptions import WorkflowAlreadyStartedError
 from app.auth import require_role
 from app.models.user import User, UserRole
 from app.schemas.operation import OperationAcceptedResponse
-from app.temporal_client import TASK_QUEUE, get_temporal_client
+from app.temporal_client import COURSE_TASK_QUEUE, get_temporal_client
 from app.workflows.publish_course_workflow import (
     ArchiveCourseWorkflow,
     ArchiveCourseWorkflowInput,
@@ -45,7 +45,7 @@ async def publish_course(
                 instructor_id=str(current_user.id),
             ),
             id=workflow_id,
-            task_queue=TASK_QUEUE,
+            task_queue=COURSE_TASK_QUEUE,
             id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE,
         )
     except WorkflowAlreadyStartedError:
@@ -84,7 +84,7 @@ async def archive_course(
                 instructor_id=str(current_user.id),
             ),
             id=workflow_id,
-            task_queue=TASK_QUEUE,
+            task_queue=COURSE_TASK_QUEUE,
             id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE,
         )
     except WorkflowAlreadyStartedError:

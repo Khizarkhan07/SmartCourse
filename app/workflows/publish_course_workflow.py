@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from temporalio import activity, workflow
 from temporalio.common import RetryPolicy
+from app.temporal_client import NOTIFICATION_TASK_QUEUE
 
 
 
@@ -227,6 +228,7 @@ class PublishCourseWorkflow:
             notify_enrolled_students_activity,
             args=[input.course_id, course_title],
             start_to_close_timeout=timedelta(seconds=30),
+            task_queue=NOTIFICATION_TASK_QUEUE,
             retry_policy=RetryPolicy(
                 initial_interval=timedelta(seconds=2),
                 backoff_coefficient=2.0,
@@ -262,6 +264,7 @@ class ArchiveCourseWorkflow:
             notify_course_archived_activity,
             args=[input.course_id, course_title],
             start_to_close_timeout=timedelta(seconds=30),
+            task_queue=NOTIFICATION_TASK_QUEUE,
             retry_policy=RetryPolicy(
                 initial_interval=timedelta(seconds=2),
                 backoff_coefficient=2.0,

@@ -1,7 +1,13 @@
 
 from temporalio.client import Client
 
-TASK_QUEUE = "smartcourse-queue"
+# Dedicated queues to isolate different workload types at scale.
+ENROLLMENT_TASK_QUEUE = "smartcourse-enrollment-queue"
+COURSE_TASK_QUEUE = "smartcourse-course-queue"
+NOTIFICATION_TASK_QUEUE = "smartcourse-notification-queue"
+
+# Legacy alias kept for older scripts/tests that still import TASK_QUEUE.
+TASK_QUEUE = ENROLLMENT_TASK_QUEUE
 
 # Module-level cache — None until first call
 _client: Client | None = None

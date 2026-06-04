@@ -2,8 +2,9 @@
 import asyncio
 from temporalio.client import Client
 from app.workflows.enrollment_workflow import EnrollmentWorkflow, EnrollmentWorkflowInput
+from app.temporal_client import ENROLLMENT_TASK_QUEUE
 
-TASK_QUEUE = "smartcourse-queue"
+TASK_QUEUE = ENROLLMENT_TASK_QUEUE
 
 # ── FILL THESE IN ──────────────────────────────────────────────────
 STUDENT_ID    = "2a8f1630-97bc-4afb-b1b0-b8c963b26dcc"
@@ -24,7 +25,7 @@ async def main():
             course_id=COURSE_ID,
             student_email=STUDENT_EMAIL,
         ),
-        id=f"enroll-{STUDENT_ID[:8]}-{COURSE_ID[:8]}",  # deterministic ID = idempotent
+        id=f"enroll-{STUDENT_ID}-{COURSE_ID}",
         task_queue=TASK_QUEUE,
     )
 
