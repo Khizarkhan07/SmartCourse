@@ -37,7 +37,7 @@ async def publish_course(
     - Course has at least one lesson
     - Caller is the course owner
     """
-    workflow_id = f"publish-{str(course_id)[:8]}"
+    workflow_id = f"publish-{course_id}"
     client = await get_temporal_client()
 
     try:
@@ -79,7 +79,7 @@ async def archive_course(
     Archived courses are no longer visible to new students.
     Existing enrollments are unaffected.
     """
-    workflow_id = f"archive-{str(course_id)[:8]}"
+    workflow_id = f"archive-{course_id}"
     client = await get_temporal_client()
 
     try:

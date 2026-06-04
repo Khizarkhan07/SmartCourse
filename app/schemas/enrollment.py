@@ -8,6 +8,11 @@ from app.schemas.course import CourseResponse
 
 # --- Input Schemas ---
 
+class EnrollmentRequest(BaseModel):
+    """Schema for enrollment API requests (student inferred from auth token)."""
+    course_id: uuid.UUID
+
+
 class EnrollmentCreate(BaseModel):
     """Schema for creating a new enrollment."""
     student_id: uuid.UUID

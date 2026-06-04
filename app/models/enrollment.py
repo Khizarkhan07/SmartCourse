@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 import enum
 
-from sqlalchemy import String, DateTime, ForeignKey, Enum as SAEnum, Integer
+from sqlalchemy import DateTime, ForeignKey, Enum as SAEnum, Integer, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -17,6 +17,9 @@ class EnrollmentStatus(str, enum.Enum):
 
 class Enrollment(Base):
     __tablename__ = "enrollments"
+    __table_args__ = (
+        UniqueConstraint("student_id", "course_id", name="uq_enrollments_student_course"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4

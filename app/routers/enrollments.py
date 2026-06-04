@@ -7,7 +7,7 @@ from temporalio.exceptions import WorkflowAlreadyStartedError
 
 
 from app.database import get_db
-from app.schemas.enrollment import EnrollmentCreate, EnrollmentResponse
+from app.schemas.enrollment import EnrollmentCreate, EnrollmentRequest, EnrollmentResponse
 from app.services import enrollment_service
 from app.auth import get_current_user, require_role
 from app.models.user import User, UserRole
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/enrollments", tags=["Enrollments"])
 
 @router.post("/", response_model=EnrollmentResponse, status_code=201)
 async def enroll_in_course(
-    data: EnrollmentCreate,
+    data: EnrollmentRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.student)),
 ):
@@ -36,7 +36,7 @@ async def enroll_in_course(
     """
     # Build a deterministic workflow ID — re-submitting the same enrollment
     # returns the existing result instead of creating a duplicate
-    workflow_id = f"enroll-{str(current_user.id)[:8]}-{str(data.course_id)[:8]}"
+    workflow_id = f"enroll-{current_user.id}-{data.course_id}"
 
     client = await get_temporal_client()
 

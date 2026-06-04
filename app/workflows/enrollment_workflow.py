@@ -49,33 +49,46 @@ async def create_enrollment_activity(student_id: str, course_id: str) -> str:
     student+course always returns the same enrollment_id.
     """
     from sqlalchemy import select
+    from sqlalchemy.dialects.postgresql import insert
     from app.database import AsyncSessionLocal
-    from app.models import Enrollment
+    from app.models import Enrollment, EnrollmentStatus
+
+    student_uuid = uuid.UUID(student_id)
+    course_uuid = uuid.UUID(course_id)
 
     async with AsyncSessionLocal() as db:
-        # Check for existing enrollment first
-        result = await db.execute(
-            select(Enrollment).where(
-                (Enrollment.student_id == uuid.UUID(student_id))
-                & (Enrollment.course_id == uuid.UUID(course_id))
+        stmt = (
+            insert(Enrollment)
+            .values(
+                student_id=student_uuid,
+                course_id=course_uuid,
+                status=EnrollmentStatus.enrolled,
+                progress_percentage=0,
             )
+            .on_conflict_do_nothing(
+                index_elements=[Enrollment.student_id, Enrollment.course_id]
+            )
+            .returning(Enrollment.id)
         )
-        existing = result.scalar_one_or_none()
-        if existing:
-            print(f"[Activity] ↩️  Already enrolled, returning existing: {existing.id}")
-            return str(existing.id)
 
-        enrollment = Enrollment(
-            student_id=uuid.UUID(student_id),
-            course_id=uuid.UUID(course_id),
-        )
-        db.add(enrollment)
+        insert_result = await db.execute(stmt)
+        enrollment_id = insert_result.scalar_one_or_none()
+
+        if enrollment_id is None:
+            existing_result = await db.execute(
+                select(Enrollment.id).where(
+                    (Enrollment.student_id == student_uuid)
+                    & (Enrollment.course_id == course_uuid)
+                )
+            )
+            enrollment_id = existing_result.scalar_one()
+            await db.rollback()
+            print(f"[Activity] ↩️  Already enrolled, returning existing: {enrollment_id}")
+            return str(enrollment_id)
+
         await db.commit()
-        await db.refresh(enrollment)
-
-    enrollment_id = str(enrollment.id)
     print(f"[Activity] ✅ Enrollment created: {enrollment_id}")
-    return enrollment_id
+    return str(enrollment_id)
 
 
 @activity.defn
