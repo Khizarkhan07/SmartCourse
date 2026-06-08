@@ -58,9 +58,22 @@ async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
     return result.scalar_one_or_none()
 
 
-async def list_users(db: AsyncSession, limit: int = 20, offset: int = 0) -> list[User]:
-    """Return users with pagination. Default page size is 20."""
-    result = await db.execute(select(User).limit(limit).offset(offset))
+async def list_users(db: AsyncSession, limit: int = 20, offset: int = 0, include_inactive: bool = False) -> list[User]:
+    """
+    Return active users with pagination. Default page size is 20. Ordered by creation date (newest first).
+    - include_inactive: if True, also returns deactivated users (admin use only)
+    """
+    query = select(User)
+    
+    if not include_inactive:
+        query = query.where(User.is_active.is_(True))
+    
+    result = await db.execute(
+        query
+        .order_by(User.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
     return list(result.scalars().all())
 
 
@@ -73,6 +86,24 @@ async def update_user_role(db: AsyncSession, user_id: uuid.UUID, new_role: UserR
     """
     user = await get_user_by_id(db, user_id)
     user.role = new_role
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+async def soft_delete_user(db: AsyncSession, user_id: uuid.UUID) -> User:
+    """
+    Soft delete a user by setting is_active = False.
+    
+    This preserves user data for auditing and allows courses/enrollments to remain intact.
+    Foreign key constraints (RESTRICT) prevent hard deletion if user has related records.
+    
+    Raises:
+        - 404 if user not found
+    """
+    user = await get_user_by_id(db, user_id)
+    user.is_active = False
     db.add(user)
     await db.commit()
     await db.refresh(user)

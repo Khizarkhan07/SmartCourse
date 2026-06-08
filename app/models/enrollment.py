@@ -25,10 +25,10 @@ class Enrollment(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     student_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     course_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("courses.id"), nullable=False, index=True
+        UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True
     )
     status: Mapped[EnrollmentStatus] = mapped_column(
         SAEnum(EnrollmentStatus), nullable=False, default=EnrollmentStatus.enrolled

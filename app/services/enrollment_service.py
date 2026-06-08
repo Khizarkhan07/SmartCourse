@@ -113,10 +113,11 @@ async def list_student_enrollments(
     limit: int = 10,
     offset: int = 0,
 ) -> list[Enrollment]:
-    """List all enrollments for a student with pagination."""
+    """List all enrollments for a student with pagination. Ordered by creation date (newest first)."""
     result = await db.execute(
         select(Enrollment)
         .where(Enrollment.student_id == student_id)
+        .order_by(Enrollment.created_at.desc())
         .limit(limit)
         .offset(offset)
     )
@@ -129,10 +130,11 @@ async def list_course_students(
     limit: int = 10,
     offset: int = 0,
 ) -> list[Enrollment]:
-    """List all students enrolled in a course with pagination."""
+    """List all students enrolled in a course with pagination. Ordered by creation date (newest first)."""
     result = await db.execute(
         select(Enrollment)
         .where(Enrollment.course_id == course_id)
+        .order_by(Enrollment.created_at.desc())
         .limit(limit)
         .offset(offset)
     )

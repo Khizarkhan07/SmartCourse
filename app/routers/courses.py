@@ -49,6 +49,8 @@ async def update_course(
 ):
     """
     Partially update a course.
-    Only instructors and admins can update. Only the owner can update their own course.
+    Only instructors and admins can update.
+    - Instructors can only update their own courses
+    - Admins can update any course
     """
-    return await course_service.update_course(db, course_id, current_user.id, data)
+    return await course_service.update_course(db, course_id, current_user.id, current_user.role, data)

@@ -70,3 +70,23 @@ async def update_user_role(
     - Returns 404 if user not found
     """
     return await user_service.update_user_role(db, user_id, role_update.role)
+
+
+@router.delete("/{user_id}", response_model=UserResponse)
+async def delete_user(
+    user_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(require_role(UserRole.admin)),
+):
+    """
+    Deactivate a user (soft delete).
+    
+    **Only admins can access this endpoint.**
+    - Sets is_active = False instead of hard deletion
+    - Preserves user data and audit trail
+    - User cannot log in after deactivation
+    - Courses and enrollments remain intact
+    - Returns 401 if not authenticated, 403 if not an admin
+    - Returns 404 if user not found
+    """
+    return await user_service.soft_delete_user(db, user_id)

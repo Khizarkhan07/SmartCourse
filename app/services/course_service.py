@@ -57,10 +57,11 @@ async def get_course_by_id(db: AsyncSession, course_id: uuid.UUID) -> Course:
 
 
 async def list_courses(db: AsyncSession, limit: int = 20, offset: int = 0) -> list[Course]:
-    """Return active courses with pagination. Default page size is 20."""
+    """Return active courses with pagination. Default page size is 20. Ordered by creation date (newest first)."""
     result = await db.execute(
         select(Course)
         .where(Course.is_active.is_(True))
+        .order_by(Course.created_at.desc())
         .limit(limit)
         .offset(offset)
     )
@@ -70,17 +71,20 @@ async def list_courses(db: AsyncSession, limit: int = 20, offset: int = 0) -> li
 async def update_course(
     db: AsyncSession,
     course_id: uuid.UUID,
-    instructor_id: uuid.UUID,
+    user_id: uuid.UUID,
+    user_role: UserRole,
     data: CourseUpdate,
 ) -> Course:
     """
     Update a course.
-    - Only the instructor who owns the course can update it
+    - Instructors can only update their own courses
+    - Admins can update any course
     """
     course = await get_course_by_id(db, course_id)
 
-    # Ownership check — instructor can only edit their own courses
-    if course.instructor_id != instructor_id:
+    # Ownership/permission check
+    # Admins can update any course; instructors can only edit their own
+    if user_role != UserRole.admin and course.instructor_id != user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You can only update your own courses",
