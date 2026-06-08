@@ -1,5 +1,7 @@
 import uuid
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -7,12 +9,16 @@ from app.schemas.user import UserCreate, UserResponse, UserRoleUpdate
 from app.services import user_service
 from app.auth import require_role
 from app.models.user import UserRole
+from app.models.user import User
+from slowapi.util import get_remote_address
 
 router = APIRouter(prefix="/users", tags=["Users"])
+limiter = Limiter(key_func=get_remote_address)
 
 
 @router.post("/", response_model=UserResponse, status_code=201)
-async def register_user(data: UserCreate, db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def register_user(request: Request, data: UserCreate, db: AsyncSession = Depends(get_db)):
     """
     Register a new user.
     FastAPI automatically:
@@ -27,6 +33,7 @@ async def register_user(data: UserCreate, db: AsyncSession = Depends(get_db)):
 async def get_all_users(
     db: AsyncSession = Depends(get_db),
     limit: int = Query(default=20, ge=1, le=100, description="Number of results per page"),
+    current_admin: User = Depends(require_role(UserRole.admin, UserRole.instructor)),
     offset: int = Query(default=0, ge=0, description="Number of results to skip"),
 ):
     """Return users with pagination. Max 100 per page."""
@@ -34,7 +41,11 @@ async def get_all_users(
 
 
 @router.get("/{user_id}", response_model=UserResponse)
-async def get_user(user_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def get_user(
+    user_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(require_role(UserRole.admin, UserRole.instructor, UserRole.student)),
+):
     """
     Get a single user by ID.
     FastAPI automatically validates that user_id is a valid UUID.
@@ -48,7 +59,7 @@ async def update_user_role(
     user_id: uuid.UUID,
     role_update: UserRoleUpdate,
     db: AsyncSession = Depends(get_db),
-    current_admin: any = Depends(require_role(UserRole.admin)),
+    current_admin: User = Depends(require_role(UserRole.admin)),
 ):
     """
     Update a user's role. 
