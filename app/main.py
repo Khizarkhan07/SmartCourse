@@ -4,7 +4,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from app.routers import auth, users, courses, enrollments, modules, lessons, publishing, operations
+from app.routers import auth, users, courses, enrollments, modules, lessons, publishing, operations, analytics
 from app.config import settings
 
 # Limiter reads the client's IP address to track request counts per IP
@@ -44,6 +44,7 @@ app.include_router(modules.router)
 app.include_router(lessons.router)
 app.include_router(publishing.router)
 app.include_router(operations.router)
+app.include_router(analytics.router)
 
 
 @app.get("/health", tags=["Health"])

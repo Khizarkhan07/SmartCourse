@@ -5,6 +5,7 @@ from app.services import (
     module_service,
     lesson_service,
     course_publishing_service,
+    analytics_service,
 )
 
 __all__ = [
@@ -14,4 +15,5 @@ __all__ = [
     "module_service",
     "lesson_service",
     "course_publishing_service",
+    "analytics_service",
 ]
