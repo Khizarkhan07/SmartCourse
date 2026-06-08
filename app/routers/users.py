@@ -3,8 +3,10 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.schemas.user import UserCreate, UserResponse
+from app.schemas.user import UserCreate, UserResponse, UserRoleUpdate
 from app.services import user_service
+from app.auth import require_role
+from app.models.user import UserRole
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -39,3 +41,21 @@ async def get_user(user_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     If not, it returns 422 before your code even runs.
     """
     return await user_service.get_user_by_id(db, user_id)
+
+
+@router.patch("/{user_id}/role", response_model=UserResponse)
+async def update_user_role(
+    user_id: uuid.UUID,
+    role_update: UserRoleUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_admin: any = Depends(require_role(UserRole.admin)),
+):
+    """
+    Update a user's role. 
+    
+    **Only admins can access this endpoint.**
+    - Requires a valid JWT token with admin role in Authorization header
+    - Returns 401 if not authenticated, 403 if not an admin
+    - Returns 404 if user not found
+    """
+    return await user_service.update_user_role(db, user_id, role_update.role)

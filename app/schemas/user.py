@@ -11,7 +11,8 @@ class UserCreate(BaseModel):
     name: str
     email: EmailStr          # Pydantic validates this is a real email format
     password: str
-    role: UserRole = UserRole.student  # defaults to student if not provided
+    # Role is NOT accepted during self-registration; all new users start as students.
+    # Only admins can promote users via a separate admin endpoint.
 
     @field_validator("password")
     @classmethod
@@ -25,6 +26,11 @@ class UserLogin(BaseModel):
     """Schema for logging in."""
     email: EmailStr
     password: str
+
+
+class UserRoleUpdate(BaseModel):
+    """Schema for admins to update a user's role."""
+    role: UserRole
 
 
 # --- Output Schemas (what the API returns) ---

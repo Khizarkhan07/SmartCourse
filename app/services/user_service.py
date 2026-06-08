@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from fastapi import HTTPException, status
 
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.user import UserCreate
 from app.security import hash_password
 
@@ -25,11 +25,12 @@ async def create_user(db: AsyncSession, data: UserCreate) -> User:
         )
 
     # Create the user object — note: hash password, never store plain text
+    # New users always start as students; only admins can promote them later
     new_user = User(
         name=data.name,
         email=data.email,
         hashed_password=hash_password(data.password),
-        role=data.role,
+        role=UserRole.student,
     )
 
     db.add(new_user)
@@ -61,3 +62,18 @@ async def list_users(db: AsyncSession, limit: int = 20, offset: int = 0) -> list
     """Return users with pagination. Default page size is 20."""
     result = await db.execute(select(User).limit(limit).offset(offset))
     return list(result.scalars().all())
+
+
+async def update_user_role(db: AsyncSession, user_id: uuid.UUID, new_role: UserRole) -> User:
+    """
+    Update a user's role. Only admins can call this via the API.
+    
+    Raises:
+        - 404 if user not found
+    """
+    user = await get_user_by_id(db, user_id)
+    user.role = new_role
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
