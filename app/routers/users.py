@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.schemas.user import UserCreate, UserResponse, UserRoleUpdate
 from app.services import user_service
-from app.auth import require_role
+from app.dependencies import require_role, get_current_user
 from app.models.user import UserRole
 from app.models.user import User
 from slowapi.util import get_remote_address

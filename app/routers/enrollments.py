@@ -9,7 +9,7 @@ from app.database import get_db
 from app.schemas.enrollment import EnrollmentRequest, EnrollmentResponse, EnrollmentProgressResponse
 from app.schemas.operation import OperationAcceptedResponse
 from app.services import enrollment_service
-from app.auth import get_current_user, require_role
+from app.dependencies import get_current_user, require_role
 from app.models.user import User, UserRole
 from app.temporal_client import ENROLLMENT_TASK_QUEUE, get_temporal_client
 from app.workflows.enrollment_workflow import EnrollmentWorkflow, EnrollmentWorkflowInput

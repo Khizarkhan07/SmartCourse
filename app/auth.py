@@ -1,13 +1,8 @@
 from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
-from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Callable
 
 from app.config import settings
-from app.database import get_db
-from app.models.user import UserRole
 
 # This tells FastAPI:
 # "Protected routes expect a Bearer token at /auth/login"
@@ -48,68 +43,3 @@ def decode_access_token(token: str) -> dict | None:
         return payload
     except JWTError:
         return None
-
-
-async def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    FastAPI dependency — extracts and validates the JWT from the request header.
-
-    How it works:
-      1. oauth2_scheme reads the Authorization: Bearer <token> header
-      2. We decode the token to get the user_id stored in "sub"
-      3. We fetch the user from the DB
-      4. We return the user — the route handler receives it as a parameter
-
-    If anything fails → 401 Unauthorized is returned automatically.
-    """
-    from app.services.user_service import get_user_by_id
-    import uuid
-
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
-    payload = decode_access_token(token)
-    if payload is None:
-        raise credentials_exception
-
-    user_id: str = payload.get("sub")
-    if user_id is None:
-        raise credentials_exception
-
-    user = await get_user_by_id(db, uuid.UUID(user_id))
-    if user is None or not user.is_active:
-        raise credentials_exception
-
-    return user
-
-
-def require_role(*roles: UserRole) -> Callable:
-    """
-    Dependency factory — returns a dependency that enforces role-based access.
-
-    Usage on a route:
-        Depends(require_role(UserRole.instructor))
-        Depends(require_role(UserRole.instructor, UserRole.admin))
-
-    How it works:
-        1. First calls get_current_user (so auth is always checked first)
-        2. Then checks if the user's role is in the allowed list
-        3. Raises 403 if not — the route handler never runs
-
-    This is a "factory" — require_role() returns a dependency function.
-    Each call to require_role() creates a fresh dependency tailored to those roles.
-    """
-    async def role_checker(current_user=Depends(get_current_user)):
-        if current_user.role not in roles:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Access denied. Required role(s): {[r.value for r in roles]}",
-            )
-        return current_user
-    return role_checker

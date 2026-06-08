@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.schemas.module import ModuleCreate, ModuleUpdate, ModuleResponse
 from app.services import module_service
-from app.auth import get_current_user, require_role
+from app.dependencies import get_current_user, require_role
 from app.models.user import User, UserRole
 
 router = APIRouter(tags=["Modules"])

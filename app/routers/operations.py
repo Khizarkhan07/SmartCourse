@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from temporalio.client import WorkflowFailureError
 from temporalio.service import RPCError
 
-from app.auth import get_current_user
+from app.dependencies import get_current_user
 from app.models.user import User
 from app.schemas.operation import OperationStatusResponse
 from app.temporal_client import get_temporal_client

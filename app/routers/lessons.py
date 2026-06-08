@@ -7,7 +7,7 @@ from app.schemas.lesson import LessonCreate, LessonUpdate, LessonResponse
 from app.schemas.enrollment import EnrollmentResponse
 from app.services import lesson_service
 from app.services import enrollment_service
-from app.auth import require_role
+from app.dependencies import require_role
 from app.models.user import User, UserRole
 
 router = APIRouter(tags=["Lessons"])
