@@ -1,10 +1,10 @@
 import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import HTTPException, status
 
 from app.models import Module, Course
 from app.schemas.module import ModuleCreate, ModuleUpdate
+from app.exceptions import NotFoundError, PermissionDeniedError
 
 
 async def create_module(
@@ -17,17 +17,11 @@ async def create_module(
     course = course_result.scalar_one_or_none()
 
     if not course:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Course not found",
-        )
+        raise NotFoundError("Course not found")
 
     # Ownership check — only the instructor who owns the course can add modules
     if course.instructor_id != instructor_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only add modules to your own courses",
-        )
+        raise PermissionDeniedError("You can only add modules to your own courses")
 
     new_module = Module(
         course_id=data.course_id,
@@ -47,15 +41,12 @@ async def get_module_by_id(
     db: AsyncSession,
     module_id: uuid.UUID,
 ) -> Module:
-    """Get a single module by ID. Raises 404 if not found."""
+    """Get a single module by ID. Raises NotFoundError if not found."""
     result = await db.execute(select(Module).where(Module.id == module_id))
     module = result.scalar_one_or_none()
 
     if not module:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Module not found",
-        )
+        raise NotFoundError("Module not found")
 
     return module
 
@@ -85,8 +76,8 @@ async def update_module(
     Only the owner of the course the module belongs to can update it.
 
     Raises:
-        HTTPException 404: if module not found
-        HTTPException 403: if caller is not the course owner
+        NotFoundError: if module not found
+        PermissionDeniedError: if caller is not the course owner
     """
     module = await get_module_by_id(db, module_id)
 
@@ -95,10 +86,7 @@ async def update_module(
     course = course_result.scalar_one()
 
     if course.instructor_id != instructor_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only update modules in your own courses",
-        )
+        raise PermissionDeniedError("You can only update modules in your own courses")
 
     # Only update fields that were actually sent (PATCH behaviour)
     update_data = data.model_dump(exclude_unset=True)

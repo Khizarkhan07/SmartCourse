@@ -1,11 +1,11 @@
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from fastapi import HTTPException, status
 
 from app.models.user import User, UserRole
 from app.schemas.user import UserCreate
 from app.security import hash_password
+from app.exceptions import NotFoundError, ConflictError
 
 
 async def create_user(db: AsyncSession, data: UserCreate) -> User:
@@ -13,16 +13,16 @@ async def create_user(db: AsyncSession, data: UserCreate) -> User:
     Register a new user.
     - Checks for duplicate email first
     - Hashes the password before storing
+    
+    Raises:
+        ConflictError: if email already exists
     """
     # Check if email already exists
     result = await db.execute(select(User).where(User.email == data.email))
     existing = result.scalar_one_or_none()
 
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="A user with this email already exists",
-        )
+        raise ConflictError("A user with this email already exists")
 
     # Create the user object — note: hash password, never store plain text
     # New users always start as students; only admins can promote them later
@@ -40,15 +40,12 @@ async def create_user(db: AsyncSession, data: UserCreate) -> User:
 
 
 async def get_user_by_id(db: AsyncSession, user_id: uuid.UUID) -> User:
-    """Fetch a single user by ID. Raises 404 if not found."""
+    """Fetch a single user by ID. Raises NotFoundError if not found."""
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
+        raise NotFoundError("User not found")
     return user
 
 

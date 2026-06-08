@@ -1,10 +1,10 @@
 import uuid
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import HTTPException, status
 
 from app.models import Course, Module, Lesson
 from app.models.course import CourseStatus
+from app.exceptions import NotFoundError, PermissionDeniedError, ValidationError, InvalidStateError
 
 
 # Valid state transitions — prevents jumping from draft → archived directly
@@ -28,13 +28,10 @@ async def _validate_course_for_publish(
         - Must have at least one lesson
 
     Raises:
-        HTTPException 400: if any requirement is not met
+        ValidationError: if any requirement is not met
     """
     if not course.description:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Course must have a description before publishing",
-        )
+        raise ValidationError("Course must have a description before publishing")
 
     # Count total lessons across all modules in this course
     lesson_count_result = await db.execute(
@@ -45,10 +42,7 @@ async def _validate_course_for_publish(
     lesson_count = lesson_count_result.scalar()
 
     if lesson_count == 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Course must have at least one lesson before publishing",
-        )
+        raise ValidationError("Course must have at least one lesson before publishing")
 
 
 async def publish_course(
@@ -62,33 +56,25 @@ async def publish_course(
     Validates the course has all required content, then transitions status.
 
     Raises:
-        HTTPException 404: if course not found
-        HTTPException 403: if caller is not the course owner
-        HTTPException 400: if course is not in draft status or fails validation
+        NotFoundError: if course not found
+        PermissionDeniedError: if caller is not the course owner
+        InvalidStateError: if course is not in draft status
+        ValidationError: if course fails validation
     """
     # Fetch course
     result = await db.execute(select(Course).where(Course.id == course_id))
     course = result.scalar_one_or_none()
 
     if not course:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Course not found",
-        )
+        raise NotFoundError("Course not found")
 
     # Ownership check
     if course.instructor_id != instructor_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only publish your own courses",
-        )
+        raise PermissionDeniedError("You can only publish your own courses")
 
     # State machine check — must be in draft to publish
     if CourseStatus.published not in VALID_TRANSITIONS[course.status]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot publish a course with status '{course.status}'. Only draft courses can be published",
-        )
+        raise InvalidStateError(f"Cannot publish a course with status '{course.status}'. Only draft courses can be published")
 
     # Content validation
     await _validate_course_for_publish(db, course)
@@ -113,32 +99,23 @@ async def archive_course(
     Existing enrollments are unaffected.
 
     Raises:
-        HTTPException 404: if course not found
-        HTTPException 403: if caller is not the course owner
-        HTTPException 400: if course is not in published status
+        NotFoundError: if course not found
+        PermissionDeniedError: if caller is not the course owner
+        InvalidStateError: if course is not in published status
     """
     result = await db.execute(select(Course).where(Course.id == course_id))
     course = result.scalar_one_or_none()
 
     if not course:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Course not found",
-        )
+        raise NotFoundError("Course not found")
 
     # Ownership check
     if course.instructor_id != instructor_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only archive your own courses",
-        )
+        raise PermissionDeniedError("You can only archive your own courses")
 
     # State machine check — must be published to archive
     if CourseStatus.archived not in VALID_TRANSITIONS[course.status]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot archive a course with status '{course.status}'. Only published courses can be archived",
-        )
+        raise InvalidStateError(f"Cannot archive a course with status '{course.status}'. Only published courses can be archived")
 
     course.status = CourseStatus.archived
     await db.commit()

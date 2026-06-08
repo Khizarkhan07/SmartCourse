@@ -1,34 +1,32 @@
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from fastapi import HTTPException, status
 
 from app.models.course import Course, CourseStatus
 from app.models.user import User, UserRole
 from app.schemas.course import CourseCreate, CourseUpdate
+from app.exceptions import NotFoundError, PermissionDeniedError, ValidationError
 
 
 async def create_course(db: AsyncSession, data: CourseCreate, instructor_id: uuid.UUID) -> Course:
     """
     Create a new course.
     - Verifies the instructor exists and has the instructor role
-    - Course starts as 'draft' — publishing is a separate workflow (Week 2)
+    - Course starts as 'draft' — publishing is a separate workflow
+    
+    Raises:
+        NotFoundError: if instructor not found
+        ValidationError: if instructor does not have instructor role
     """
     # Verify the instructor exists and is actually an instructor
     result = await db.execute(select(User).where(User.id == instructor_id))
     instructor = result.scalar_one_or_none()
 
     if not instructor:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Instructor not found",
-        )
+        raise NotFoundError("Instructor not found")
 
     if instructor.role != UserRole.instructor:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only users with the instructor role can create courses",
-        )
+        raise ValidationError("Only users with the instructor role can create courses")
 
     new_course = Course(
         title=data.title,
@@ -44,15 +42,12 @@ async def create_course(db: AsyncSession, data: CourseCreate, instructor_id: uui
 
 
 async def get_course_by_id(db: AsyncSession, course_id: uuid.UUID) -> Course:
-    """Fetch a single course by ID. Raises 404 if not found."""
+    """Fetch a single course by ID. Raises NotFoundError if not found."""
     result = await db.execute(select(Course).where(Course.id == course_id))
     course = result.scalar_one_or_none()
 
     if not course:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Course not found",
-        )
+        raise NotFoundError("Course not found")
     return course
 
 
@@ -85,10 +80,7 @@ async def update_course(
     # Ownership/permission check
     # Admins can update any course; instructors can only edit their own
     if user_role != UserRole.admin and course.instructor_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only update your own courses",
-        )
+        raise PermissionDeniedError("You can only update your own courses")
 
     # Only update fields that were actually sent (not None)
     # This is what makes PATCH different from PUT

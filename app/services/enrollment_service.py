@@ -1,7 +1,6 @@
 import uuid
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import HTTPException, status
 from temporalio.common import WorkflowIDReusePolicy
 from temporalio.exceptions import WorkflowAlreadyStartedError
 
@@ -22,6 +21,7 @@ from app.workflows.course_completion_workflow import (
     CourseCompletionWorkflow,
     CourseCompletionWorkflowInput,
 )
+from app.exceptions import NotFoundError, ValidationError, PermissionDeniedError
 
 
 async def create_enrollment(
@@ -34,8 +34,8 @@ async def create_enrollment(
     Idempotent: if the student is already enrolled, returns the existing enrollment.
 
     Raises:
-        HTTPException 404: if course or student not found
-        HTTPException 400: if course is not published
+        NotFoundError: if course or student not found
+        ValidationError: if course is not published
     """
 
     # Step 1: Check if enrollment already exists (idempotency)
@@ -55,26 +55,17 @@ async def create_enrollment(
     course = course_result.scalar_one_or_none()
 
     if not course:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Course {data.course_id} not found",
-        )
+        raise NotFoundError(f"Course {data.course_id} not found")
 
     if course.status != CourseStatus.published:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Course is not published (status: {course.status})",
-        )
+        raise ValidationError(f"Course is not published (status: {course.status})")
 
     # Step 3: Validate student exists
     student_result = await db.execute(select(User).where(User.id == data.student_id))
     student = student_result.scalar_one_or_none()
 
     if not student:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Student {data.student_id} not found",
-        )
+        raise NotFoundError(f"Student {data.student_id} not found")
 
     # Step 4: Create new enrollment — progress always starts at 0 (server-controlled)
     new_enrollment = Enrollment(
@@ -94,15 +85,12 @@ async def get_enrollment(
     db: AsyncSession,
     enrollment_id: uuid.UUID,
 ) -> Enrollment:
-    """Get a single enrollment by ID. Raises 404 if not found."""
+    """Get a single enrollment by ID. Raises NotFoundError if not found."""
     result = await db.execute(select(Enrollment).where(Enrollment.id == enrollment_id))
     enrollment = result.scalar_one_or_none()
 
     if not enrollment:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Enrollment not found",
-        )
+        raise NotFoundError("Enrollment not found")
 
     return enrollment
 
@@ -212,17 +200,11 @@ async def mark_lesson_complete(
 ) -> Enrollment:
     lesson = await db.get(Lesson, lesson_id)
     if not lesson:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Lesson not found",
-        )
+        raise NotFoundError("Lesson not found")
 
     module = await db.get(Module, lesson.module_id)
     if not module:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Module not found for lesson",
-        )
+        raise NotFoundError("Module not found for lesson")
 
     enrollment_result = await db.execute(
         select(Enrollment).where(
@@ -232,10 +214,7 @@ async def mark_lesson_complete(
     )
     enrollment = enrollment_result.scalar_one_or_none()
     if not enrollment:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Student is not enrolled in this lesson's course",
-        )
+        raise ValidationError("Student is not enrolled in this lesson's course")
 
     completion_result = await db.execute(
         select(LessonCompletion).where(
@@ -272,10 +251,7 @@ async def get_enrollment_progress(
     enrollment = await get_enrollment(db, enrollment_id)
 
     if current_user.role == UserRole.student and enrollment.student_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only view your own enrollment progress",
-        )
+        raise PermissionDeniedError("You can only view your own enrollment progress")
 
     completed_lessons, total_lessons, progress_percentage = await _compute_course_progress(
         db,
