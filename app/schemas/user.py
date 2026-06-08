@@ -26,12 +26,6 @@ class UserCreate(BaseModel):
         return v
 
 
-class UserLogin(BaseModel):
-    """Schema for logging in."""
-    email: EmailStr
-    password: str
-
-
 class UserRoleUpdate(BaseModel):
     """Schema for admins to update a user's role."""
     role: UserRole

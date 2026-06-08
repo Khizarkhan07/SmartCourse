@@ -60,7 +60,7 @@ async def list_courses(db: AsyncSession, limit: int = 20, offset: int = 0) -> li
     """Return active courses with pagination. Default page size is 20."""
     result = await db.execute(
         select(Course)
-        .where(Course.is_active == True)  # noqa: E712
+        .where(Course.is_active.is_(True))
         .limit(limit)
         .offset(offset)
     )
