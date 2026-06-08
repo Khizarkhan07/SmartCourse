@@ -27,6 +27,10 @@ from app.workflows.publish_course_workflow import (
     transition_course_status_activity,
     notify_enrolled_students_activity,
 )
+from app.workflows.course_completion_workflow import (
+    CourseCompletionWorkflow,
+    send_course_completion_email_activity,
+)
 from app.temporal_client import (
     COURSE_TASK_QUEUE,
     ENROLLMENT_TASK_QUEUE,
@@ -42,12 +46,13 @@ async def main():
     print(f"📋 Queue (workflows/enrollment): '{ENROLLMENT_TASK_QUEUE}'")
     print(f"📋 Queue (course state): '{COURSE_TASK_QUEUE}'")
     print(f"📋 Queue (notifications): '{NOTIFICATION_TASK_QUEUE}'")
-    print(f"🔄 Enrollment queue workflows: HelloWorldWorkflow, EnrollmentWorkflow")
+    print(f"🔄 Enrollment queue workflows: HelloWorldWorkflow, EnrollmentWorkflow, CourseCompletionWorkflow")
     print(f"🔄 Course queue workflows: PublishCourseWorkflow, ArchiveCourseWorkflow")
     print(f"⚡ Enrollment queue activities: say_hello, validate_enrollment, create_enrollment")
     print(f"⚡ Course queue activities: validate_publish, transition_course_status, validate_archive")
     print(f"⚡ Notification queue activities: send_welcome_email, send_enrollment_email,")
-    print(f"                               notify_enrolled_students, notify_course_archived")
+    print(f"                               notify_enrolled_students, notify_course_archived,")
+    print(f"                               send_course_completion_email")
     print(f"\nWaiting for tasks... (Ctrl+C to stop)\n")
 
     async with AsyncExitStack() as stack:
@@ -55,7 +60,7 @@ async def main():
             Worker(
                 client,
                 task_queue=ENROLLMENT_TASK_QUEUE,
-                workflows=[HelloWorldWorkflow, EnrollmentWorkflow],
+                workflows=[HelloWorldWorkflow, EnrollmentWorkflow, CourseCompletionWorkflow],
                 activities=[
                     say_hello,
                     validate_enrollment_activity,
@@ -86,6 +91,7 @@ async def main():
                     send_enrollment_email_activity,
                     notify_enrolled_students_activity,
                     notify_course_archived_activity,
+                    send_course_completion_email_activity,
                 ],
             )
         )

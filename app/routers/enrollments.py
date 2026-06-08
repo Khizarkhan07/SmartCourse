@@ -6,7 +6,7 @@ from temporalio.exceptions import WorkflowAlreadyStartedError
 
 
 from app.database import get_db
-from app.schemas.enrollment import EnrollmentRequest, EnrollmentResponse
+from app.schemas.enrollment import EnrollmentRequest, EnrollmentResponse, EnrollmentProgressResponse
 from app.schemas.operation import OperationAcceptedResponse
 from app.services import enrollment_service
 from app.auth import get_current_user, require_role
@@ -98,3 +98,13 @@ async def get_enrollment(
         )
 
     return enrollment
+
+
+@router.get("/{enrollment_id}/progress", response_model=EnrollmentProgressResponse)
+async def get_enrollment_progress(
+    enrollment_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return lesson-based progress details for an enrollment."""
+    return await enrollment_service.get_enrollment_progress(db, enrollment_id, current_user)

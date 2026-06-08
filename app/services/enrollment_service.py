@@ -1,10 +1,27 @@
 import uuid
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
+from temporalio.common import WorkflowIDReusePolicy
+from temporalio.exceptions import WorkflowAlreadyStartedError
 
-from app.models import Enrollment, Course, User, CourseStatus
+from app.models import (
+    Enrollment,
+    Course,
+    User,
+    UserRole,
+    CourseStatus,
+    Lesson,
+    Module,
+    LessonCompletion,
+    EnrollmentStatus,
+)
 from app.schemas.enrollment import EnrollmentCreate
+from app.temporal_client import ENROLLMENT_TASK_QUEUE, get_temporal_client
+from app.workflows.course_completion_workflow import (
+    CourseCompletionWorkflow,
+    CourseCompletionWorkflowInput,
+)
 
 
 async def create_enrollment(
@@ -120,3 +137,165 @@ async def list_course_students(
         .offset(offset)
     )
     return list(result.scalars().all())
+
+
+async def _compute_course_progress(
+    db: AsyncSession,
+    student_id: uuid.UUID,
+    course_id: uuid.UUID,
+) -> tuple[int, int, int]:
+    total_lessons_stmt = (
+        select(func.count(Lesson.id))
+        .join(Module, Lesson.module_id == Module.id)
+        .where(Module.course_id == course_id)
+    )
+    total_lessons = int((await db.scalar(total_lessons_stmt)) or 0)
+
+    completed_lessons_stmt = (
+        select(func.count(LessonCompletion.id))
+        .join(Lesson, LessonCompletion.lesson_id == Lesson.id)
+        .join(Module, Lesson.module_id == Module.id)
+        .where(
+            LessonCompletion.student_id == student_id,
+            Module.course_id == course_id,
+        )
+    )
+    completed_lessons = int((await db.scalar(completed_lessons_stmt)) or 0)
+
+    if total_lessons == 0:
+        progress_percentage = 0
+    else:
+        progress_percentage = int(round((completed_lessons / total_lessons) * 100))
+
+    return completed_lessons, total_lessons, progress_percentage
+
+
+async def _trigger_course_completion_if_needed(
+    db: AsyncSession,
+    enrollment: Enrollment,
+) -> None:
+    if enrollment.progress_percentage < 100:
+        return
+
+    student = await db.get(User, enrollment.student_id)
+    course = await db.get(Course, enrollment.course_id)
+    if not student or not course:
+        return
+
+    workflow_id = f"complete-{enrollment.id}"
+    client = await get_temporal_client()
+
+    try:
+        await client.start_workflow(
+            CourseCompletionWorkflow.run,
+            CourseCompletionWorkflowInput(
+                enrollment_id=str(enrollment.id),
+                student_id=str(enrollment.student_id),
+                student_email=student.email,
+                course_id=str(enrollment.course_id),
+                course_title=course.title,
+            ),
+            id=workflow_id,
+            task_queue=ENROLLMENT_TASK_QUEUE,
+            id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE,
+        )
+    except WorkflowAlreadyStartedError:
+        pass
+
+
+async def mark_lesson_complete(
+    db: AsyncSession,
+    lesson_id: uuid.UUID,
+    student_id: uuid.UUID,
+) -> Enrollment:
+    lesson = await db.get(Lesson, lesson_id)
+    if not lesson:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Lesson not found",
+        )
+
+    module = await db.get(Module, lesson.module_id)
+    if not module:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Module not found for lesson",
+        )
+
+    enrollment_result = await db.execute(
+        select(Enrollment).where(
+            Enrollment.student_id == student_id,
+            Enrollment.course_id == module.course_id,
+        )
+    )
+    enrollment = enrollment_result.scalar_one_or_none()
+    if not enrollment:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Student is not enrolled in this lesson's course",
+        )
+
+    completion_result = await db.execute(
+        select(LessonCompletion).where(
+            LessonCompletion.student_id == student_id,
+            LessonCompletion.lesson_id == lesson_id,
+        )
+    )
+    completion = completion_result.scalar_one_or_none()
+
+    if completion is None:
+        db.add(LessonCompletion(student_id=student_id, lesson_id=lesson_id))
+
+    completed_lessons, total_lessons, progress_percentage = await _compute_course_progress(
+        db,
+        student_id=student_id,
+        course_id=module.course_id,
+    )
+
+    enrollment.progress_percentage = progress_percentage
+    if progress_percentage >= 100:
+        enrollment.status = EnrollmentStatus.completed
+
+    await db.commit()
+    await db.refresh(enrollment)
+    await _trigger_course_completion_if_needed(db, enrollment)
+    return enrollment
+
+
+async def get_enrollment_progress(
+    db: AsyncSession,
+    enrollment_id: uuid.UUID,
+    current_user: User,
+) -> dict:
+    enrollment = await get_enrollment(db, enrollment_id)
+
+    if current_user.role == UserRole.student and enrollment.student_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only view your own enrollment progress",
+        )
+
+    completed_lessons, total_lessons, progress_percentage = await _compute_course_progress(
+        db,
+        student_id=enrollment.student_id,
+        course_id=enrollment.course_id,
+    )
+
+    if enrollment.progress_percentage != progress_percentage:
+        enrollment.progress_percentage = progress_percentage
+        if progress_percentage >= 100:
+            enrollment.status = EnrollmentStatus.completed
+        await db.commit()
+        await db.refresh(enrollment)
+
+    await _trigger_course_completion_if_needed(db, enrollment)
+
+    return {
+        "enrollment_id": enrollment.id,
+        "student_id": enrollment.student_id,
+        "course_id": enrollment.course_id,
+        "progress_percentage": enrollment.progress_percentage,
+        "completed_lessons": completed_lessons,
+        "total_lessons": total_lessons,
+        "enrollment_status": enrollment.status,
+    }

@@ -34,3 +34,13 @@ class EnrollmentResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class EnrollmentProgressResponse(BaseModel):
+    enrollment_id: uuid.UUID
+    student_id: uuid.UUID
+    course_id: uuid.UUID
+    progress_percentage: int
+    completed_lessons: int
+    total_lessons: int
+    enrollment_status: EnrollmentStatus

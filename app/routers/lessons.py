@@ -4,7 +4,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.schemas.lesson import LessonCreate, LessonUpdate, LessonResponse
+from app.schemas.enrollment import EnrollmentResponse
 from app.services import lesson_service
+from app.services import enrollment_service
 from app.auth import require_role
 from app.models.user import User, UserRole
 
@@ -57,3 +59,13 @@ async def update_lesson(
     Only the course owner can update their lessons.
     """
     return await lesson_service.update_lesson(db, lesson_id, current_user.id, data)
+
+
+@router.post("/lessons/{lesson_id}/complete", response_model=EnrollmentResponse)
+async def complete_lesson(
+    lesson_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.student)),
+):
+    """Mark a lesson as completed for the current student and update course progress."""
+    return await enrollment_service.mark_lesson_complete(db, lesson_id, current_user.id)
