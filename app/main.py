@@ -1,15 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from app.routers import auth, users, courses, enrollments, modules, lessons, publishing, operations, analytics
 from app.config import settings
-
-# Limiter reads the client's IP address to track request counts per IP
-# In production this can be backed by Redis for distributed rate limiting
-limiter = Limiter(key_func=get_remote_address)
+from app.limiter import limiter
 
 app = FastAPI(
     title="SmartCourse API",
@@ -17,7 +13,7 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# Attach limiter to app state so routes can access it via Depends
+# Attach shared limiter to app state so routes can access it via Depends
 app.state.limiter = limiter
 
 # Returns 429 Too Many Requests when a limit is exceeded

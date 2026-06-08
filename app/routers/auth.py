@@ -1,16 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from app.database import get_db
 from app.services.user_service import get_user_by_email
 from app.security import verify_password
 from app.auth import create_access_token
+from app.limiter import limiter
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
-limiter = Limiter(key_func=get_remote_address)
 
 
 @router.post("/login")
