@@ -1,9 +1,12 @@
-"""
+"""Temporal worker setup and task queue registration.
 
-Run this with:
-    python -m app.temporal_worker
+Run this module alongside FastAPI with:
+    python -m app.infrastructure.temporal.worker
 
-Keep it running alongside FastAPI.
+This keeps the worker listening for tasks from all three queues:
+- ENROLLMENT_TASK_QUEUE: Enrollment workflows and validation
+- COURSE_TASK_QUEUE: Course publishing and archival
+- NOTIFICATION_TASK_QUEUE: Async email and notification activities
 """
 
 import asyncio
@@ -31,7 +34,7 @@ from app.workflows.course_completion_workflow import (
     CourseCompletionWorkflow,
     send_course_completion_email_activity,
 )
-from app.temporal_client import (
+from app.infrastructure.temporal.client import (
     COURSE_TASK_QUEUE,
     ENROLLMENT_TASK_QUEUE,
     NOTIFICATION_TASK_QUEUE,

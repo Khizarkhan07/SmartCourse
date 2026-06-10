@@ -10,7 +10,7 @@ Key concepts added:
 from datetime import timedelta
 from temporalio import activity, workflow
 from temporalio.common import RetryPolicy
-from app.temporal_client import NOTIFICATION_TASK_QUEUE
+from app.infrastructure.temporal import NOTIFICATION_TASK_QUEUE
 
 
 # ─────────────────────────────────────────

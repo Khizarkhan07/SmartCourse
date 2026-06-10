@@ -3,10 +3,10 @@ from fastapi import APIRouter, Depends, status
 from temporalio.common import WorkflowIDReusePolicy
 from temporalio.exceptions import WorkflowAlreadyStartedError
 
-from app.dependencies import require_role
+from app.api.dependencies import require_role
 from app.models.user import User, UserRole
 from app.schemas.operation import OperationAcceptedResponse
-from app.temporal_client import COURSE_TASK_QUEUE, get_temporal_client
+from app.infrastructure.temporal import COURSE_TASK_QUEUE, get_temporal_client
 from app.workflows.publish_course_workflow import (
     ArchiveCourseWorkflow,
     ArchiveCourseWorkflowInput,

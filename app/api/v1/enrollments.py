@@ -1,17 +1,16 @@
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
 from temporalio.common import WorkflowIDReusePolicy
 from temporalio.exceptions import WorkflowAlreadyStartedError
 
 
-from app.database import get_db
+from app.infrastructure.database.unit_of_work import UnitOfWork, get_uow
 from app.schemas.enrollment import EnrollmentRequest, EnrollmentResponse, EnrollmentProgressResponse
 from app.schemas.operation import OperationAcceptedResponse
 from app.services import enrollment_service
-from app.dependencies import get_current_user, require_role
+from app.api.dependencies import get_current_user, require_role
 from app.models.user import User, UserRole
-from app.temporal_client import ENROLLMENT_TASK_QUEUE, get_temporal_client
+from app.infrastructure.temporal import ENROLLMENT_TASK_QUEUE, get_temporal_client
 from app.workflows.enrollment_workflow import EnrollmentWorkflow, EnrollmentWorkflowInput
 
 router = APIRouter(prefix="/enrollments", tags=["Enrollments"])
@@ -69,25 +68,25 @@ async def enroll_in_course(
 
 @router.get("/", response_model=list[EnrollmentResponse])
 async def list_my_enrollments(
-    db: AsyncSession = Depends(get_db),
+    uow: UnitOfWork = Depends(get_uow),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     current_user: User = Depends(get_current_user),
 ):
     """List all courses the current user is enrolled in."""
     return await enrollment_service.list_student_enrollments(
-        db, student_id=current_user.id, limit=limit, offset=offset
+        uow, student_id=current_user.id, limit=limit, offset=offset
     )
 
 
 @router.get("/{enrollment_id}", response_model=EnrollmentResponse)
 async def get_enrollment(
     enrollment_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
+    uow: UnitOfWork = Depends(get_uow),
     current_user: User = Depends(get_current_user),
 ):
     """Get a single enrollment by ID. Only the enrolled student can view it."""
-    enrollment = await enrollment_service.get_enrollment(db, enrollment_id)
+    enrollment = await enrollment_service.get_enrollment(uow, enrollment_id)
 
     # Guard: students can only see their own enrollments
     if current_user.role == UserRole.student and enrollment.student_id != current_user.id:
@@ -103,8 +102,8 @@ async def get_enrollment(
 @router.get("/{enrollment_id}/progress", response_model=EnrollmentProgressResponse)
 async def get_enrollment_progress(
     enrollment_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
+    uow: UnitOfWork = Depends(get_uow),
     current_user: User = Depends(get_current_user),
 ):
     """Return lesson-based progress details for an enrollment."""
-    return await enrollment_service.get_enrollment_progress(db, enrollment_id, current_user)
+    return await enrollment_service.get_enrollment_progress(uow, enrollment_id, current_user)

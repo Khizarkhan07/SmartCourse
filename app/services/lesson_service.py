@@ -1,14 +1,20 @@
 import uuid
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Lesson, Module, Course
+from app.models import Lesson
 from app.schemas.lesson import LessonCreate, LessonUpdate
-from app.exceptions import NotFoundError, PermissionDeniedError
+from app.core.exceptions import NotFoundError, PermissionDeniedError
+from app.infrastructure.database.unit_of_work import UnitOfWork
+from app.repositories.lesson_repository import LessonRepository
+
+
+def _lessons_repo(uow: UnitOfWork) -> LessonRepository:
+    if uow.lessons is None:
+        raise RuntimeError("UnitOfWork is not initialized")
+    return uow.lessons
 
 
 async def create_lesson(
-    db: AsyncSession,
+    uow: UnitOfWork,
     data: LessonCreate,
     instructor_id: uuid.UUID,
 ) -> Lesson:
@@ -22,16 +28,21 @@ async def create_lesson(
         NotFoundError: if module not found
         PermissionDeniedError: if caller is not the course owner
     """
+    if uow.session is None:
+        raise RuntimeError("UnitOfWork session is not initialized")
+
+    repo = _lessons_repo(uow)
+
     # Verify module exists
-    module_result = await db.execute(select(Module).where(Module.id == data.module_id))
-    module = module_result.scalar_one_or_none()
+    module = await repo.get_module_by_id(data.module_id)
 
     if not module:
         raise NotFoundError("Module not found")
 
     # Ownership check via module's parent course
-    course_result = await db.execute(select(Course).where(Course.id == module.course_id))
-    course = course_result.scalar_one()
+    course = await repo.get_course_by_id(module.course_id)
+    if course is None:
+        raise NotFoundError("Course not found")
 
     if course.instructor_id != instructor_id:
         raise PermissionDeniedError("You can only add lessons to your own courses")
@@ -43,20 +54,19 @@ async def create_lesson(
         order=data.order,
     )
 
-    db.add(new_lesson)
-    await db.commit()
-    await db.refresh(new_lesson)
+    uow.session.add(new_lesson)
+    await uow.commit()
+    await uow.session.refresh(new_lesson)
 
     return new_lesson
 
 
 async def get_lesson_by_id(
-    db: AsyncSession,
+    uow: UnitOfWork,
     lesson_id: uuid.UUID,
 ) -> Lesson:
     """Get a single lesson by ID. Raises NotFoundError if not found."""
-    result = await db.execute(select(Lesson).where(Lesson.id == lesson_id))
-    lesson = result.scalar_one_or_none()
+    lesson = await _lessons_repo(uow).get_by_id(lesson_id)
 
     if not lesson:
         raise NotFoundError("Lesson not found")
@@ -65,20 +75,15 @@ async def get_lesson_by_id(
 
 
 async def list_lessons(
-    db: AsyncSession,
+    uow: UnitOfWork,
     module_id: uuid.UUID,
 ) -> list[Lesson]:
     """List all lessons for a module, ordered by the `order` field."""
-    result = await db.execute(
-        select(Lesson)
-        .where(Lesson.module_id == module_id)
-        .order_by(Lesson.order)
-    )
-    return list(result.scalars().all())
+    return await _lessons_repo(uow).list_by_module(module_id)
 
 
 async def update_lesson(
-    db: AsyncSession,
+    uow: UnitOfWork,
     lesson_id: uuid.UUID,
     instructor_id: uuid.UUID,
     data: LessonUpdate,
@@ -92,14 +97,20 @@ async def update_lesson(
         NotFoundError: if lesson not found
         PermissionDeniedError: if caller is not the course owner
     """
-    lesson = await get_lesson_by_id(db, lesson_id)
+    if uow.session is None:
+        raise RuntimeError("UnitOfWork session is not initialized")
+
+    repo = _lessons_repo(uow)
+    lesson = await get_lesson_by_id(uow, lesson_id)
 
     # Ownership check via lesson's parent module → parent course
-    module_result = await db.execute(select(Module).where(Module.id == lesson.module_id))
-    module = module_result.scalar_one()
+    module = await repo.get_module_by_id(lesson.module_id)
+    if module is None:
+        raise NotFoundError("Module not found")
 
-    course_result = await db.execute(select(Course).where(Course.id == module.course_id))
-    course = course_result.scalar_one()
+    course = await repo.get_course_by_id(module.course_id)
+    if course is None:
+        raise NotFoundError("Course not found")
 
     if course.instructor_id != instructor_id:
         raise PermissionDeniedError("You can only update lessons in your own courses")
@@ -109,7 +120,7 @@ async def update_lesson(
     for field, value in update_data.items():
         setattr(lesson, field, value)
 
-    await db.commit()
-    await db.refresh(lesson)
+    await uow.commit()
+    await uow.session.refresh(lesson)
 
     return lesson

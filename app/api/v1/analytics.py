@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import require_role
-from app.database import get_db
+from app.api.dependencies import require_role
+from app.infrastructure.database.unit_of_work import UnitOfWork, get_uow
 from app.models.user import User, UserRole
 from app.schemas.analytics import (
     AnalyticsOverviewResponse,
@@ -17,26 +16,26 @@ router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
 @router.get("/overview", response_model=AnalyticsOverviewResponse)
 async def get_overview(
-    db: AsyncSession = Depends(get_db),
+    uow: UnitOfWork = Depends(get_uow),
     current_user: User = Depends(require_role(UserRole.instructor, UserRole.admin)),
 ):
     """Return high-level platform metrics for dashboards."""
     _ = current_user
-    return await analytics_service.get_overview_metrics(db)
+    return await analytics_service.get_overview_metrics(uow)
 
 
 @router.get("/enrollments", response_model=EnrollmentAnalyticsResponse)
 async def get_enrollment_analytics(
     days: int = Query(default=30, ge=1, le=365),
-    db: AsyncSession = Depends(get_db),
+    uow: UnitOfWork = Depends(get_uow),
     current_user: User = Depends(require_role(UserRole.instructor, UserRole.admin)),
 ):
     """Return enrollment time-series for the selected period."""
     _ = current_user
-    points = await analytics_service.get_enrollments_over_time(db, days=days)
+    points = await analytics_service.get_enrollments_over_time(uow, days=days)
     return {
         "period_days": days,
-        "total_new_enrollments": await analytics_service.get_new_enrollments(db, days=days),
+        "total_new_enrollments": await analytics_service.get_new_enrollments(uow, days=days),
         "points": points,
     }
 
@@ -44,16 +43,16 @@ async def get_enrollment_analytics(
 @router.get("/courses", response_model=CourseAnalyticsResponse)
 async def get_course_analytics(
     top_n: int = Query(default=5, ge=1, le=20),
-    db: AsyncSession = Depends(get_db),
+    uow: UnitOfWork = Depends(get_uow),
     current_user: User = Depends(require_role(UserRole.instructor, UserRole.admin)),
 ):
     """Return completion and course popularity metrics."""
     _ = current_user
     return {
-        "completion_rate": await analytics_service.get_completion_rate(db),
-        "avg_time_to_complete_days": await analytics_service.get_avg_time_to_complete_days(db),
-        "avg_courses_per_student": await analytics_service.get_avg_courses_per_student(db),
-        "most_popular_courses": await analytics_service.get_most_popular_courses(db, top_n=top_n),
+        "completion_rate": await analytics_service.get_completion_rate(uow),
+        "avg_time_to_complete_days": await analytics_service.get_avg_time_to_complete_days(uow),
+        "avg_courses_per_student": await analytics_service.get_avg_courses_per_student(uow),
+        "most_popular_courses": await analytics_service.get_most_popular_courses(uow, top_n=top_n),
     }
 
 

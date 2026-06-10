@@ -4,7 +4,12 @@ from datetime import timedelta
 
 from temporalio import activity, workflow
 from temporalio.common import RetryPolicy
-from app.temporal_client import NOTIFICATION_TASK_QUEUE
+from app.infrastructure.temporal import NOTIFICATION_TASK_QUEUE
+from app.workflows.dependencies import (
+    ApplicationError,
+    func,
+    select,
+)
 
 
 
@@ -24,14 +29,8 @@ class ArchiveCourseWorkflowInput:
 
 @activity.defn
 async def validate_publish_activity(course_id: str, instructor_id: str) -> str:
-
-
-    from sqlalchemy import select, func
-    from temporalio.exceptions import ApplicationError
-
-    from app.database import AsyncSessionLocal
-    from app.models import Course, Module, Lesson
-    from app.models.course import CourseStatus
+    from app.infrastructure.database import AsyncSessionLocal
+    from app.models import Course, CourseStatus, Lesson, Module
 
     VALID_TRANSITIONS = {
         CourseStatus.draft: [CourseStatus.published],
@@ -81,11 +80,8 @@ async def validate_publish_activity(course_id: str, instructor_id: str) -> str:
 
 @activity.defn
 async def validate_archive_activity(course_id: str, instructor_id: str) -> str:
-    from temporalio.exceptions import ApplicationError
-
-    from app.database import AsyncSessionLocal
-    from app.models import Course
-    from app.models.course import CourseStatus
+    from app.infrastructure.database import AsyncSessionLocal
+    from app.models import Course, CourseStatus
 
     VALID_TRANSITIONS = {
         CourseStatus.draft: [CourseStatus.published],
@@ -125,10 +121,9 @@ async def transition_course_status_activity(course_id: str, new_status: str) -> 
     Kept generic (accepts new_status as string) so both publish
     and archive can reuse the same activity.
     """
-    from app.database import AsyncSessionLocal
-    from app.models import Course
-    from app.models.course import CourseStatus
-
+    from app.infrastructure.database import AsyncSessionLocal
+    from app.models import Course, CourseStatus
+    
     async with AsyncSessionLocal() as db:
         course = await db.get(Course, uuid.UUID(course_id))
         course.status = CourseStatus(new_status)
@@ -146,12 +141,10 @@ async def notify_enrolled_students_activity(course_id: str, course_title: str) -
     Currently mocked — just logs and returns.
 
     Has a RetryPolicy in the workflow so transient failures are retried
+    from app.infrastructure.database import AsyncSessionLocal
+    
     without re-running the status transition.
     """
-    from sqlalchemy import select
-    from app.database import AsyncSessionLocal
-    from app.models import Enrollment, User
-
     async with AsyncSessionLocal() as db:
         # JOIN enrollments → users to get student emails in one query
         result = await db.execute(
@@ -172,10 +165,9 @@ async def notify_enrolled_students_activity(course_id: str, course_title: str) -
 
 @activity.defn
 async def notify_course_archived_activity(course_id: str, course_title: str) -> str:
-    from sqlalchemy import select
-    from app.database import AsyncSessionLocal
+    from app.infrastructure.database import AsyncSessionLocal
     from app.models import Enrollment, User
-
+    
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(User.email)

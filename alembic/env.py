@@ -13,7 +13,7 @@ load_dotenv()
 
 # Import Base and all models so Alembic can detect table changes automatically
 # The noqa comment suppresses "imported but unused" warnings — they ARE used (by Base.metadata)
-from app.database import Base
+from app.infrastructure.database import Base
 from app.models import User, Course  # noqa: F401
 
 # Alembic config object

@@ -1,31 +1,48 @@
 import uuid
-from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
 from temporalio.common import WorkflowIDReusePolicy
 from temporalio.exceptions import WorkflowAlreadyStartedError
 
 from app.models import (
     Enrollment,
-    Course,
     User,
     UserRole,
     CourseStatus,
-    Lesson,
-    Module,
     LessonCompletion,
     EnrollmentStatus,
 )
 from app.schemas.enrollment import EnrollmentCreate
-from app.temporal_client import ENROLLMENT_TASK_QUEUE, get_temporal_client
+from app.infrastructure.temporal import ENROLLMENT_TASK_QUEUE, get_temporal_client
 from app.workflows.course_completion_workflow import (
     CourseCompletionWorkflow,
     CourseCompletionWorkflowInput,
 )
-from app.exceptions import NotFoundError, ValidationError, PermissionDeniedError
+from app.core.exceptions import NotFoundError, ValidationError, PermissionDeniedError
+from app.infrastructure.database.unit_of_work import UnitOfWork
+from app.repositories.course_repository import CourseRepository
+from app.repositories.enrollment_repository import EnrollmentRepository
+from app.repositories.user_repository import UserRepository
+
+
+def _enrollments_repo(uow: UnitOfWork) -> EnrollmentRepository:
+    if uow.enrollments is None:
+        raise RuntimeError("UnitOfWork is not initialized")
+    return uow.enrollments
+
+
+def _courses_repo(uow: UnitOfWork) -> CourseRepository:
+    if uow.courses is None:
+        raise RuntimeError("UnitOfWork is not initialized")
+    return uow.courses
+
+
+def _users_repo(uow: UnitOfWork) -> UserRepository:
+    if uow.users is None:
+        raise RuntimeError("UnitOfWork is not initialized")
+    return uow.users
 
 
 async def create_enrollment(
-    db: AsyncSession,
+    uow: UnitOfWork,
     data: EnrollmentCreate,
 ) -> Enrollment:
     """
@@ -38,21 +55,19 @@ async def create_enrollment(
         ValidationError: if course is not published
     """
 
+    if uow.session is None:
+        raise RuntimeError("UnitOfWork session is not initialized")
+
+    repo = _enrollments_repo(uow)
+
     # Step 1: Check if enrollment already exists (idempotency)
-    existing = await db.execute(
-        select(Enrollment).where(
-            (Enrollment.student_id == data.student_id)
-            & (Enrollment.course_id == data.course_id)
-        )
-    )
-    enrollment = existing.scalar_one_or_none()
+    enrollment = await repo.get_by_student_course(data.student_id, data.course_id)
 
     if enrollment:
         return enrollment  # Already enrolled — return as-is
 
     # Step 2: Validate course exists and is published
-    course_result = await db.execute(select(Course).where(Course.id == data.course_id))
-    course = course_result.scalar_one_or_none()
+    course = await _courses_repo(uow).get_course_by_id(data.course_id)
 
     if not course:
         raise NotFoundError(f"Course {data.course_id} not found")
@@ -61,8 +76,7 @@ async def create_enrollment(
         raise ValidationError(f"Course is not published (status: {course.status})")
 
     # Step 3: Validate student exists
-    student_result = await db.execute(select(User).where(User.id == data.student_id))
-    student = student_result.scalar_one_or_none()
+    student = await _users_repo(uow).get_by_id(data.student_id)
 
     if not student:
         raise NotFoundError(f"Student {data.student_id} not found")
@@ -74,20 +88,19 @@ async def create_enrollment(
         progress_percentage=0,
     )
 
-    db.add(new_enrollment)
-    await db.commit()
-    await db.refresh(new_enrollment)
+    uow.session.add(new_enrollment)
+    await uow.commit()
+    await uow.session.refresh(new_enrollment)
 
     return new_enrollment
 
 
 async def get_enrollment(
-    db: AsyncSession,
+    uow: UnitOfWork,
     enrollment_id: uuid.UUID,
 ) -> Enrollment:
     """Get a single enrollment by ID. Raises NotFoundError if not found."""
-    result = await db.execute(select(Enrollment).where(Enrollment.id == enrollment_id))
-    enrollment = result.scalar_one_or_none()
+    enrollment = await _enrollments_repo(uow).get_by_id(enrollment_id)
 
     if not enrollment:
         raise NotFoundError("Enrollment not found")
@@ -96,61 +109,41 @@ async def get_enrollment(
 
 
 async def list_student_enrollments(
-    db: AsyncSession,
+    uow: UnitOfWork,
     student_id: uuid.UUID,
     limit: int = 10,
     offset: int = 0,
 ) -> list[Enrollment]:
     """List all enrollments for a student with pagination. Ordered by creation date (newest first)."""
-    result = await db.execute(
-        select(Enrollment)
-        .where(Enrollment.student_id == student_id)
-        .order_by(Enrollment.created_at.desc())
-        .limit(limit)
-        .offset(offset)
+    return await _enrollments_repo(uow).list_by_student(
+        student_id,
+        limit=limit,
+        offset=offset,
     )
-    return list(result.scalars().all())
 
 
 async def list_course_students(
-    db: AsyncSession,
+    uow: UnitOfWork,
     course_id: uuid.UUID,
     limit: int = 10,
     offset: int = 0,
 ) -> list[Enrollment]:
     """List all students enrolled in a course with pagination. Ordered by creation date (newest first)."""
-    result = await db.execute(
-        select(Enrollment)
-        .where(Enrollment.course_id == course_id)
-        .order_by(Enrollment.created_at.desc())
-        .limit(limit)
-        .offset(offset)
+    return await _enrollments_repo(uow).list_by_course(
+        course_id,
+        limit=limit,
+        offset=offset,
     )
-    return list(result.scalars().all())
 
 
 async def _compute_course_progress(
-    db: AsyncSession,
+    uow: UnitOfWork,
     student_id: uuid.UUID,
     course_id: uuid.UUID,
 ) -> tuple[int, int, int]:
-    total_lessons_stmt = (
-        select(func.count(Lesson.id))
-        .join(Module, Lesson.module_id == Module.id)
-        .where(Module.course_id == course_id)
-    )
-    total_lessons = int((await db.scalar(total_lessons_stmt)) or 0)
-
-    completed_lessons_stmt = (
-        select(func.count(LessonCompletion.id))
-        .join(Lesson, LessonCompletion.lesson_id == Lesson.id)
-        .join(Module, Lesson.module_id == Module.id)
-        .where(
-            LessonCompletion.student_id == student_id,
-            Module.course_id == course_id,
-        )
-    )
-    completed_lessons = int((await db.scalar(completed_lessons_stmt)) or 0)
+    repo = _enrollments_repo(uow)
+    total_lessons = await repo.count_total_lessons(course_id)
+    completed_lessons = await repo.count_completed_lessons(student_id, course_id)
 
     if total_lessons == 0:
         progress_percentage = 0
@@ -161,14 +154,14 @@ async def _compute_course_progress(
 
 
 async def _trigger_course_completion_if_needed(
-    db: AsyncSession,
+    uow: UnitOfWork,
     enrollment: Enrollment,
 ) -> None:
     if enrollment.progress_percentage < 100:
         return
 
-    student = await db.get(User, enrollment.student_id)
-    course = await db.get(Course, enrollment.course_id)
+    student = await _users_repo(uow).get_by_id(enrollment.student_id)
+    course = await _courses_repo(uow).get_course_by_id(enrollment.course_id)
     if not student or not course:
         return
 
@@ -194,41 +187,40 @@ async def _trigger_course_completion_if_needed(
 
 
 async def mark_lesson_complete(
-    db: AsyncSession,
+    uow: UnitOfWork,
     lesson_id: uuid.UUID,
     student_id: uuid.UUID,
 ) -> Enrollment:
-    lesson = await db.get(Lesson, lesson_id)
+    if uow.session is None:
+        raise RuntimeError("UnitOfWork session is not initialized")
+
+    repo = _enrollments_repo(uow)
+
+    lesson = await repo.get_lesson_by_id(lesson_id)
     if not lesson:
         raise NotFoundError("Lesson not found")
 
-    module = await db.get(Module, lesson.module_id)
+    module = await repo.get_module_by_id(lesson.module_id)
     if not module:
         raise NotFoundError("Module not found for lesson")
 
-    enrollment_result = await db.execute(
-        select(Enrollment).where(
-            Enrollment.student_id == student_id,
-            Enrollment.course_id == module.course_id,
-        )
+    enrollment = await repo.get_by_student_course(
+        student_id=student_id,
+        course_id=module.course_id,
     )
-    enrollment = enrollment_result.scalar_one_or_none()
     if not enrollment:
         raise ValidationError("Student is not enrolled in this lesson's course")
 
-    completion_result = await db.execute(
-        select(LessonCompletion).where(
-            LessonCompletion.student_id == student_id,
-            LessonCompletion.lesson_id == lesson_id,
-        )
+    completion = await repo.get_lesson_completion(
+        student_id=student_id,
+        lesson_id=lesson_id,
     )
-    completion = completion_result.scalar_one_or_none()
 
     if completion is None:
-        db.add(LessonCompletion(student_id=student_id, lesson_id=lesson_id))
+        uow.session.add(LessonCompletion(student_id=student_id, lesson_id=lesson_id))
 
     completed_lessons, total_lessons, progress_percentage = await _compute_course_progress(
-        db,
+        uow,
         student_id=student_id,
         course_id=module.course_id,
     )
@@ -237,24 +229,27 @@ async def mark_lesson_complete(
     if progress_percentage >= 100:
         enrollment.status = EnrollmentStatus.completed
 
-    await db.commit()
-    await db.refresh(enrollment)
-    await _trigger_course_completion_if_needed(db, enrollment)
+    await uow.commit()
+    await uow.session.refresh(enrollment)
+    await _trigger_course_completion_if_needed(uow, enrollment)
     return enrollment
 
 
 async def get_enrollment_progress(
-    db: AsyncSession,
+    uow: UnitOfWork,
     enrollment_id: uuid.UUID,
     current_user: User,
 ) -> dict:
-    enrollment = await get_enrollment(db, enrollment_id)
+    if uow.session is None:
+        raise RuntimeError("UnitOfWork session is not initialized")
+
+    enrollment = await get_enrollment(uow, enrollment_id)
 
     if current_user.role == UserRole.student and enrollment.student_id != current_user.id:
         raise PermissionDeniedError("You can only view your own enrollment progress")
 
     completed_lessons, total_lessons, progress_percentage = await _compute_course_progress(
-        db,
+        uow,
         student_id=enrollment.student_id,
         course_id=enrollment.course_id,
     )
@@ -263,10 +258,10 @@ async def get_enrollment_progress(
         enrollment.progress_percentage = progress_percentage
         if progress_percentage >= 100:
             enrollment.status = EnrollmentStatus.completed
-        await db.commit()
-        await db.refresh(enrollment)
+        await uow.commit()
+        await uow.session.refresh(enrollment)
 
-    await _trigger_course_completion_if_needed(db, enrollment)
+    await _trigger_course_completion_if_needed(uow, enrollment)
 
     return {
         "enrollment_id": enrollment.id,

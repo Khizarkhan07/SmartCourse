@@ -2,7 +2,7 @@
 import asyncio
 from temporalio.client import Client
 from app.workflows.enrollment_workflow import EnrollmentWorkflow, EnrollmentWorkflowInput
-from app.temporal_client import ENROLLMENT_TASK_QUEUE
+from app.infrastructure.temporal import ENROLLMENT_TASK_QUEUE
 
 TASK_QUEUE = ENROLLMENT_TASK_QUEUE
 

@@ -1,12 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
+from app.infrastructure.database.unit_of_work import UnitOfWork, get_uow
 from app.services.user_service import get_user_by_email
-from app.security import verify_password
-from app.auth import create_access_token
-from app.limiter import limiter
+from app.core.security import verify_password, create_access_token
+from app.core.limiter import limiter
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -16,14 +14,14 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 async def login(
     request: Request,        # required by slowapi to read the IP
     form_data: OAuth2PasswordRequestForm = Depends(),
-    db: AsyncSession = Depends(get_db),
+    uow: UnitOfWork = Depends(get_uow),
 ):
     """
     Login and receive a JWT token.
     Rate limited to 5 attempts per minute per IP.
     Exceeding this returns HTTP 429 Too Many Requests.
     """
-    user = await get_user_by_email(db, form_data.username)
+    user = await get_user_by_email(uow, form_data.username)
 
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(

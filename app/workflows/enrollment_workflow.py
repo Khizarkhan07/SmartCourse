@@ -5,7 +5,12 @@ from datetime import timedelta
 
 from temporalio import activity, workflow
 from temporalio.common import RetryPolicy
-from app.temporal_client import NOTIFICATION_TASK_QUEUE
+from app.infrastructure.temporal import NOTIFICATION_TASK_QUEUE
+from app.workflows.dependencies import (
+    ApplicationError,
+    insert,
+    select,
+)
 
 
 
@@ -21,10 +26,7 @@ class EnrollmentWorkflowInput:
 
 @activity.defn
 async def validate_enrollment_activity(student_id: str, course_id: str) -> None:
-   
-    from temporalio.exceptions import ApplicationError
-
-    from app.database import AsyncSessionLocal
+    from app.infrastructure.database import AsyncSessionLocal
     from app.models import Course, CourseStatus
 
     async with AsyncSessionLocal() as db:
@@ -49,11 +51,9 @@ async def create_enrollment_activity(student_id: str, course_id: str) -> str:
     This is the idempotency guarantee: calling this twice with the same
     student+course always returns the same enrollment_id.
     """
-    from sqlalchemy import select
-    from sqlalchemy.dialects.postgresql import insert
-    from app.database import AsyncSessionLocal
+    from app.infrastructure.database import AsyncSessionLocal
     from app.models import Enrollment, EnrollmentStatus
-
+    
     student_uuid = uuid.UUID(student_id)
     course_uuid = uuid.UUID(course_id)
 

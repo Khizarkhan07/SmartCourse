@@ -1,13 +1,12 @@
 import uuid
 from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
+from app.infrastructure.database.unit_of_work import UnitOfWork, get_uow
 from app.schemas.lesson import LessonCreate, LessonUpdate, LessonResponse
 from app.schemas.enrollment import EnrollmentResponse
 from app.services import lesson_service
 from app.services import enrollment_service
-from app.dependencies import require_role
+from app.api.dependencies import require_role
 from app.models.user import User, UserRole
 
 router = APIRouter(tags=["Lessons"])
@@ -17,7 +16,7 @@ router = APIRouter(tags=["Lessons"])
 async def create_lesson(
     module_id: uuid.UUID,
     data: LessonCreate,
-    db: AsyncSession = Depends(get_db),
+    uow: UnitOfWork = Depends(get_uow),
     current_user: User = Depends(require_role(UserRole.instructor, UserRole.admin)),
 ):
     """
@@ -26,46 +25,46 @@ async def create_lesson(
     """
     # Force module_id from URL path — client cannot target a different module in the body
     data.module_id = module_id
-    return await lesson_service.create_lesson(db, data, current_user.id)
+    return await lesson_service.create_lesson(uow, data, current_user.id)
 
 
 @router.get("/modules/{module_id}/lessons", response_model=list[LessonResponse])
 async def list_lessons(
     module_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
+    uow: UnitOfWork = Depends(get_uow),
 ):
     """List all lessons in a module, ordered by sequence. Public — no auth required."""
-    return await lesson_service.list_lessons(db, module_id)
+    return await lesson_service.list_lessons(uow, module_id)
 
 
 @router.get("/lessons/{lesson_id}", response_model=LessonResponse)
 async def get_lesson(
     lesson_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
+    uow: UnitOfWork = Depends(get_uow),
 ):
     """Get a single lesson by ID. Public — no auth required."""
-    return await lesson_service.get_lesson_by_id(db, lesson_id)
+    return await lesson_service.get_lesson_by_id(uow, lesson_id)
 
 
 @router.patch("/lessons/{lesson_id}", response_model=LessonResponse)
 async def update_lesson(
     lesson_id: uuid.UUID,
     data: LessonUpdate,
-    db: AsyncSession = Depends(get_db),
+    uow: UnitOfWork = Depends(get_uow),
     current_user: User = Depends(require_role(UserRole.instructor, UserRole.admin)),
 ):
     """
     Partially update a lesson.
     Only the course owner can update their lessons.
     """
-    return await lesson_service.update_lesson(db, lesson_id, current_user.id, data)
+    return await lesson_service.update_lesson(uow, lesson_id, current_user.id, data)
 
 
 @router.post("/lessons/{lesson_id}/complete", response_model=EnrollmentResponse)
 async def complete_lesson(
     lesson_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
+    uow: UnitOfWork = Depends(get_uow),
     current_user: User = Depends(require_role(UserRole.student)),
 ):
     """Mark a lesson as completed for the current student and update course progress."""
-    return await enrollment_service.mark_lesson_complete(db, lesson_id, current_user.id)
+    return await enrollment_service.mark_lesson_complete(uow, lesson_id, current_user.id)

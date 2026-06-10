@@ -1,11 +1,10 @@
 import uuid
 from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
+from app.infrastructure.database.unit_of_work import UnitOfWork, get_uow
 from app.schemas.module import ModuleCreate, ModuleUpdate, ModuleResponse
 from app.services import module_service
-from app.dependencies import get_current_user, require_role
+from app.api.dependencies import get_current_user, require_role
 from app.models.user import User, UserRole
 
 router = APIRouter(tags=["Modules"])
@@ -15,7 +14,7 @@ router = APIRouter(tags=["Modules"])
 async def create_module(
     course_id: uuid.UUID,
     data: ModuleCreate,
-    db: AsyncSession = Depends(get_db),
+    uow: UnitOfWork = Depends(get_uow),
     current_user: User = Depends(require_role(UserRole.instructor, UserRole.admin)),
 ):
     """
@@ -24,36 +23,36 @@ async def create_module(
     """
     # Force course_id from URL path — client cannot target a different course in the body
     data.course_id = course_id
-    return await module_service.create_module(db, data, current_user.id)
+    return await module_service.create_module(uow, data, current_user.id)
 
 
 @router.get("/courses/{course_id}/modules", response_model=list[ModuleResponse])
 async def list_modules(
     course_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
+    uow: UnitOfWork = Depends(get_uow),
 ):
     """List all modules for a course, ordered by sequence. Public — no auth required."""
-    return await module_service.list_modules(db, course_id)
+    return await module_service.list_modules(uow, course_id)
 
 
 @router.get("/modules/{module_id}", response_model=ModuleResponse)
 async def get_module(
     module_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
+    uow: UnitOfWork = Depends(get_uow),
 ):
     """Get a single module by ID. Public — no auth required."""
-    return await module_service.get_module_by_id(db, module_id)
+    return await module_service.get_module_by_id(uow, module_id)
 
 
 @router.patch("/modules/{module_id}", response_model=ModuleResponse)
 async def update_module(
     module_id: uuid.UUID,
     data: ModuleUpdate,
-    db: AsyncSession = Depends(get_db),
+    uow: UnitOfWork = Depends(get_uow),
     current_user: User = Depends(require_role(UserRole.instructor, UserRole.admin)),
 ):
     """
     Partially update a module.
     Only the course owner can update their modules.
     """
-    return await module_service.update_module(db, module_id, current_user.id, data)
+    return await module_service.update_module(uow, module_id, current_user.id, data)

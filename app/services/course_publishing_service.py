@@ -1,10 +1,16 @@
 import uuid
-from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Course, Module, Lesson
+from app.models import Course
 from app.models.course import CourseStatus
-from app.exceptions import NotFoundError, PermissionDeniedError, ValidationError, InvalidStateError
+from app.core.exceptions import NotFoundError, PermissionDeniedError, ValidationError, InvalidStateError
+from app.infrastructure.database.unit_of_work import UnitOfWork
+from app.repositories.course_repository import CourseRepository
+
+
+def _courses_repo(uow: UnitOfWork) -> CourseRepository:
+    if uow.courses is None:
+        raise RuntimeError("UnitOfWork is not initialized")
+    return uow.courses
 
 
 # Valid state transitions — prevents jumping from draft → archived directly
@@ -16,7 +22,7 @@ VALID_TRANSITIONS = {
 
 
 async def _validate_course_for_publish(
-    db: AsyncSession,
+    uow: UnitOfWork,
     course: Course,
 ) -> None:
     """
@@ -34,19 +40,14 @@ async def _validate_course_for_publish(
         raise ValidationError("Course must have a description before publishing")
 
     # Count total lessons across all modules in this course
-    lesson_count_result = await db.execute(
-        select(func.count(Lesson.id))
-        .join(Module, Lesson.module_id == Module.id)
-        .where(Module.course_id == course.id)
-    )
-    lesson_count = lesson_count_result.scalar()
+    lesson_count = await _courses_repo(uow).count_lessons(course.id)
 
     if lesson_count == 0:
         raise ValidationError("Course must have at least one lesson before publishing")
 
 
 async def publish_course(
-    db: AsyncSession,
+    uow: UnitOfWork,
     course_id: uuid.UUID,
     instructor_id: uuid.UUID,
 ) -> Course:
@@ -62,8 +63,7 @@ async def publish_course(
         ValidationError: if course fails validation
     """
     # Fetch course
-    result = await db.execute(select(Course).where(Course.id == course_id))
-    course = result.scalar_one_or_none()
+    course = await _courses_repo(uow).get_course_by_id(course_id)
 
     if not course:
         raise NotFoundError("Course not found")
@@ -77,18 +77,21 @@ async def publish_course(
         raise InvalidStateError(f"Cannot publish a course with status '{course.status}'. Only draft courses can be published")
 
     # Content validation
-    await _validate_course_for_publish(db, course)
+    await _validate_course_for_publish(uow, course)
 
     # Transition status
     course.status = CourseStatus.published
-    await db.commit()
-    await db.refresh(course)
+    if uow.session is None:
+        raise RuntimeError("UnitOfWork session is not initialized")
+
+    await uow.commit()
+    await uow.session.refresh(course)
 
     return course
 
 
 async def archive_course(
-    db: AsyncSession,
+    uow: UnitOfWork,
     course_id: uuid.UUID,
     instructor_id: uuid.UUID,
 ) -> Course:
@@ -103,8 +106,7 @@ async def archive_course(
         PermissionDeniedError: if caller is not the course owner
         InvalidStateError: if course is not in published status
     """
-    result = await db.execute(select(Course).where(Course.id == course_id))
-    course = result.scalar_one_or_none()
+    course = await _courses_repo(uow).get_course_by_id(course_id)
 
     if not course:
         raise NotFoundError("Course not found")
@@ -118,7 +120,10 @@ async def archive_course(
         raise InvalidStateError(f"Cannot archive a course with status '{course.status}'. Only published courses can be archived")
 
     course.status = CourseStatus.archived
-    await db.commit()
-    await db.refresh(course)
+    if uow.session is None:
+        raise RuntimeError("UnitOfWork session is not initialized")
+
+    await uow.commit()
+    await uow.session.refresh(course)
 
     return course

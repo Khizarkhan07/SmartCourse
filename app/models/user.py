@@ -5,7 +5,7 @@ from sqlalchemy import String, Boolean, DateTime, Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 
-from app.database import Base
+from app.infrastructure.database import Base
 import enum
 
 
