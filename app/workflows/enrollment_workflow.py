@@ -140,6 +140,32 @@ async def send_enrollment_email_activity(email: str, course_title: str) -> str:
     return message
 
 
+@activity.defn
+async def emit_enrollment_created_event_activity(
+    enrollment_id: str,
+    student_id: str,
+    course_id: str,
+) -> None:
+    from app.events import KafkaEventProducer
+
+    producer = KafkaEventProducer()
+    producer.emit_enrollment_created(
+        enrollment_id=enrollment_id,
+        student_id=student_id,
+        course_id=course_id,
+        status="enrolled",
+        progress_percentage=0,
+    )
+
+    logger.info(
+        "enrollment.created event emitted",
+        activity="emit_enrollment_created_event_activity",
+        enrollment_id=enrollment_id,
+        student_id=student_id,
+        course_id=course_id,
+    )
+
+
 
 @workflow.defn
 class EnrollmentWorkflow:
@@ -174,6 +200,19 @@ class EnrollmentWorkflow:
             send_enrollment_email_activity,
             args=[input.student_email, "SmartCourse"],   # course title placeholder
             start_to_close_timeout=timedelta(seconds=30),
+            task_queue=NOTIFICATION_TASK_QUEUE,
+            retry_policy=RetryPolicy(
+                initial_interval=timedelta(seconds=2),
+                backoff_coefficient=2.0,
+                maximum_attempts=3,
+            ),
+        )
+
+        # Step 4: Emit durable domain event to Kafka for downstream consumers
+        await workflow.execute_activity(
+            emit_enrollment_created_event_activity,
+            args=[enrollment_id, input.student_id, input.course_id],
+            start_to_close_timeout=timedelta(seconds=20),
             task_queue=NOTIFICATION_TASK_QUEUE,
             retry_policy=RetryPolicy(
                 initial_interval=timedelta(seconds=2),

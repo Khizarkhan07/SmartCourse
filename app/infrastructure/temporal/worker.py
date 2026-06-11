@@ -20,10 +20,12 @@ from app.workflows.enrollment_workflow import (
     EnrollmentWorkflow,
     validate_enrollment_activity,
     create_enrollment_activity,
+    emit_enrollment_created_event_activity,
     send_enrollment_email_activity,
 )
 from app.workflows.publish_course_workflow import (
     ArchiveCourseWorkflow,
+    emit_course_published_event_activity,
     notify_course_archived_activity,
     validate_archive_activity,
     PublishCourseWorkflow,
@@ -76,8 +78,10 @@ async def main():
         notification_activities=[
             "send_welcome_email",
             "send_enrollment_email_activity",
+            "emit_enrollment_created_event_activity",
             "notify_enrolled_students_activity",
             "notify_course_archived_activity",
+            "emit_course_published_event_activity",
             "send_course_completion_email_activity",
         ],
     )
@@ -117,8 +121,10 @@ async def main():
                 activities=[
                     send_welcome_email,
                     send_enrollment_email_activity,
+                    emit_enrollment_created_event_activity,
                     notify_enrolled_students_activity,
                     notify_course_archived_activity,
+                    emit_course_published_event_activity,
                     send_course_completion_email_activity,
                 ],
             )

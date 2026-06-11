@@ -161,10 +161,11 @@ async def notify_enrolled_students_activity(course_id: str, course_title: str) -
     Currently mocked — just logs and returns.
 
     Has a RetryPolicy in the workflow so transient failures are retried
-    from app.infrastructure.database import AsyncSessionLocal
-    
     without re-running the status transition.
     """
+    from app.infrastructure.database import AsyncSessionLocal
+    from app.models import Enrollment, User
+
     async with AsyncSessionLocal() as db:
         # JOIN enrollments → users to get student emails in one query
         result = await db.execute(
@@ -228,6 +229,30 @@ async def notify_course_archived_activity(course_id: str, course_title: str) -> 
     return f"Archive notification sent to {student_count} student(s) for course '{course_title}'"
 
 
+@activity.defn
+async def emit_course_published_event_activity(
+    course_id: str,
+    instructor_id: str,
+    course_title: str,
+) -> None:
+    from app.events import KafkaEventProducer
+
+    producer = KafkaEventProducer()
+    producer.emit_course_published(
+        course_id=course_id,
+        instructor_id=instructor_id,
+        title=course_title,
+    )
+
+    logger.info(
+        "course.published event emitted",
+        activity="emit_course_published_event_activity",
+        course_id=course_id,
+        instructor_id=instructor_id,
+        course_title=course_title,
+    )
+
+
 # ─────────────────────────────────────────────────────────
 # WORKFLOW
 # ─────────────────────────────────────────────────────────
@@ -264,6 +289,19 @@ class PublishCourseWorkflow:
             notify_enrolled_students_activity,
             args=[input.course_id, course_title],
             start_to_close_timeout=timedelta(seconds=30),
+            task_queue=NOTIFICATION_TASK_QUEUE,
+            retry_policy=RetryPolicy(
+                initial_interval=timedelta(seconds=2),
+                backoff_coefficient=2.0,
+                maximum_attempts=3,
+            ),
+        )
+
+        # Step 4: Emit durable domain event to Kafka for downstream consumers
+        await workflow.execute_activity(
+            emit_course_published_event_activity,
+            args=[input.course_id, input.instructor_id, course_title],
+            start_to_close_timeout=timedelta(seconds=20),
             task_queue=NOTIFICATION_TASK_QUEUE,
             retry_policy=RetryPolicy(
                 initial_interval=timedelta(seconds=2),
