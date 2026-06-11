@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from temporalio import activity, workflow
 from temporalio.common import RetryPolicy
+from app.core.logging import get_logger
 from app.infrastructure.temporal import NOTIFICATION_TASK_QUEUE
 from app.workflows.dependencies import (
     ApplicationError,
@@ -11,6 +12,8 @@ from app.workflows.dependencies import (
     select,
 )
 
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -74,7 +77,13 @@ async def validate_publish_activity(course_id: str, instructor_id: str) -> str:
 
         course_title = course.title
 
-    print(f"[Activity] ✅ Validation passed for course '{course_title}'")
+    logger.info(
+        "publish validation passed",
+        activity="validate_publish_activity",
+        course_id=course_id,
+        instructor_id=instructor_id,
+        course_title=course_title,
+    )
     return course_title
 
 
@@ -109,7 +118,13 @@ async def validate_archive_activity(course_id: str, instructor_id: str) -> str:
 
         course_title = course.title
 
-    print(f"[Activity] ✅ Archive validation passed for course '{course_title}'")
+    logger.info(
+        "archive validation passed",
+        activity="validate_archive_activity",
+        course_id=course_id,
+        instructor_id=instructor_id,
+        course_title=course_title,
+    )
     return course_title
 
 
@@ -129,7 +144,12 @@ async def transition_course_status_activity(course_id: str, new_status: str) -> 
         course.status = CourseStatus(new_status)
         await db.commit()
 
-    print(f"[Activity] ✅ Course {course_id} status → {new_status}")
+    logger.info(
+        "course status transitioned",
+        activity="transition_course_status_activity",
+        course_id=course_id,
+        new_status=new_status,
+    )
 
 
 @activity.defn
@@ -156,10 +176,22 @@ async def notify_enrolled_students_activity(course_id: str, course_title: str) -
 
     # TODO: replace with real email provider (SendGrid, SES, etc.)
     for email in student_emails:
-        print(f"[Activity] 📧 Sending publish notification to {email} for '{course_title}'")
+        logger.info(
+            "sending publish notification",
+            activity="notify_enrolled_students_activity",
+            course_id=course_id,
+            course_title=course_title,
+            email=email,
+        )
 
     student_count = len(student_emails)
-    print(f"[Activity] ✅ Notified {student_count} student(s)")
+    logger.info(
+        "publish notifications sent",
+        activity="notify_enrolled_students_activity",
+        course_id=course_id,
+        course_title=course_title,
+        student_count=student_count,
+    )
     return f"Notified {student_count} student(s) for course '{course_title}'"
 
 
@@ -177,10 +209,22 @@ async def notify_course_archived_activity(course_id: str, course_title: str) -> 
         student_emails = result.scalars().all()
 
     for email in student_emails:
-        print(f"[Activity] 📧 Sending archive notification to {email} for '{course_title}'")
+        logger.info(
+            "sending archive notification",
+            activity="notify_course_archived_activity",
+            course_id=course_id,
+            course_title=course_title,
+            email=email,
+        )
 
     student_count = len(student_emails)
-    print(f"[Activity] ✅ Archive notification sent to {student_count} student(s)")
+    logger.info(
+        "archive notifications sent",
+        activity="notify_course_archived_activity",
+        course_id=course_id,
+        course_title=course_title,
+        student_count=student_count,
+    )
     return f"Archive notification sent to {student_count} student(s) for course '{course_title}'"
 
 

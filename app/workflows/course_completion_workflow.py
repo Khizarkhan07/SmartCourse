@@ -4,7 +4,11 @@ from datetime import timedelta
 from temporalio import activity, workflow
 from temporalio.common import RetryPolicy
 
+from app.core.logging import get_logger
 from app.infrastructure.temporal import NOTIFICATION_TASK_QUEUE
+
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -23,7 +27,12 @@ async def send_course_completion_email_activity(
 ) -> str:
     # TODO: replace with real certificate generation + email provider.
     message = f"Course completion email sent to {student_email} for '{course_title}'"
-    print(f"[Activity] 🎓 {message}")
+    logger.info(
+        "course completion email sent",
+        activity="send_course_completion_email_activity",
+        student_email=student_email,
+        course_title=course_title,
+    )
     return message
 
 

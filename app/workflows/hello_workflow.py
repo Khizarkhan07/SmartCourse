@@ -10,7 +10,11 @@ Key concepts added:
 from datetime import timedelta
 from temporalio import activity, workflow
 from temporalio.common import RetryPolicy
+from app.core.logging import get_logger
 from app.infrastructure.temporal import NOTIFICATION_TASK_QUEUE
+
+
+logger = get_logger(__name__)
 
 
 # ─────────────────────────────────────────
@@ -20,7 +24,7 @@ from app.infrastructure.temporal import NOTIFICATION_TASK_QUEUE
 @activity.defn
 async def say_hello(name: str) -> str:
     """Simple activity — always succeeds."""
-    print(f"[Activity] Running say_hello for: {name}")
+    logger.info("hello activity running", activity="say_hello", name=name)
     return f"Hello, {name}! Welcome to SmartCourse."
 
 
@@ -46,13 +50,28 @@ async def send_welcome_email(email: str) -> str:
     global _attempt_count
     _attempt_count += 1
 
-    print(f"[Activity] send_welcome_email attempt #{_attempt_count} for {email}")
+    logger.info(
+        "welcome email attempt",
+        activity="send_welcome_email",
+        email=email,
+        attempt=_attempt_count,
+    )
 
     if _attempt_count < 3:
-        print(f"[Activity] ❌ Email server unavailable — attempt {_attempt_count} failed")
+        logger.warning(
+            "welcome email failed",
+            activity="send_welcome_email",
+            email=email,
+            attempt=_attempt_count,
+        )
         raise Exception(f"Email server unavailable (simulated failure #{_attempt_count})")
 
-    print(f"[Activity] ✅ Email sent successfully on attempt #{_attempt_count}")
+    logger.info(
+        "welcome email sent",
+        activity="send_welcome_email",
+        email=email,
+        attempt=_attempt_count,
+    )
     _attempt_count = 0  # reset for next run
     return f"Welcome email sent to {email}"
 

@@ -5,6 +5,7 @@ from datetime import timedelta
 
 from temporalio import activity, workflow
 from temporalio.common import RetryPolicy
+from app.core.logging import get_logger
 from app.infrastructure.temporal import NOTIFICATION_TASK_QUEUE
 from app.workflows.dependencies import (
     ApplicationError,
@@ -12,6 +13,8 @@ from app.workflows.dependencies import (
     select,
 )
 
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -39,7 +42,12 @@ async def validate_enrollment_activity(student_id: str, course_id: str) -> None:
                 f"Course '{course.title}' is not published", non_retryable=True
             )
 
-    print(f"[Activity] ✅ Validation passed for student {student_id} → course {course_id}")
+    logger.info(
+        "enrollment validation passed",
+        activity="validate_enrollment_activity",
+        student_id=student_id,
+        course_id=course_id,
+    )
 
 
 @activity.defn
@@ -84,11 +92,23 @@ async def create_enrollment_activity(student_id: str, course_id: str) -> str:
             )
             enrollment_id = existing_result.scalar_one()
             await db.rollback()
-            print(f"[Activity] ↩️  Already enrolled, returning existing: {enrollment_id}")
+            logger.info(
+                "enrollment already exists",
+                activity="create_enrollment_activity",
+                student_id=student_id,
+                course_id=course_id,
+                enrollment_id=str(enrollment_id),
+            )
             return str(enrollment_id)
 
         await db.commit()
-    print(f"[Activity] ✅ Enrollment created: {enrollment_id}")
+    logger.info(
+        "enrollment created",
+        activity="create_enrollment_activity",
+        student_id=student_id,
+        course_id=course_id,
+        enrollment_id=str(enrollment_id),
+    )
     return str(enrollment_id)
 
 
@@ -104,9 +124,19 @@ async def send_enrollment_email_activity(email: str, course_title: str) -> str:
     so transient failures (email server down) are retried automatically.
     """
     # TODO: Replace with real email provider call
-    print(f"[Activity] 📧 Sending welcome email to {email} for '{course_title}'")
+    logger.info(
+        "sending enrollment email",
+        activity="send_enrollment_email_activity",
+        email=email,
+        course_title=course_title,
+    )
     message = f"Welcome email sent to {email} for course '{course_title}'"
-    print(f"[Activity] ✅ {message}")
+    logger.info(
+        "enrollment email sent",
+        activity="send_enrollment_email_activity",
+        email=email,
+        course_title=course_title,
+    )
     return message
 
 

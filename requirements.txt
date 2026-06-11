@@ -12,3 +12,4 @@ pydantic[email]>=2.11.0
 pydantic-settings>=2.7.0
 python-dotenv>=1.0.1
 temporalio==1.27.2
+structlog==24.4.0
