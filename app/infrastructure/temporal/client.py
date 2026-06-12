@@ -7,6 +7,7 @@ Dedicated queues isolate different workload types at scale:
 """
 
 from temporalio.client import Client
+from app.config import settings
 
 # Dedicated queues to isolate different workload types at scale.
 ENROLLMENT_TASK_QUEUE = "smartcourse-enrollment-queue"
@@ -21,7 +22,7 @@ async def get_temporal_client() -> Client:
     """Return a cached Temporal client, connecting on first call."""
     global _client
     if _client is None:
-        _client = await Client.connect("localhost:7233")
+        _client = await Client.connect(settings.TEMPORAL_HOST)
     return _client
 
 

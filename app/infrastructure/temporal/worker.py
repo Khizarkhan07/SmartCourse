@@ -14,6 +14,7 @@ from contextlib import AsyncExitStack
 from temporalio.client import Client
 from temporalio.worker import Worker
 
+from app.config import settings
 from app.core.logging import configure_logging, get_logger
 from app.workflows.hello_workflow import HelloWorldWorkflow, say_hello, send_welcome_email
 from app.workflows.enrollment_workflow import (
@@ -51,11 +52,11 @@ async def main():
     configure_logging()
 
     # Connect to the Temporal server
-    client = await Client.connect("localhost:7233")
+    client = await Client.connect(settings.TEMPORAL_HOST)
 
     logger.info(
         "temporal worker connected",
-        temporal_host="localhost:7233",
+        temporal_host=settings.TEMPORAL_HOST,
         enrollment_task_queue=ENROLLMENT_TASK_QUEUE,
         course_task_queue=COURSE_TASK_QUEUE,
         notification_task_queue=NOTIFICATION_TASK_QUEUE,

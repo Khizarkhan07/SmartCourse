@@ -9,18 +9,16 @@ from urllib.request import Request, urlopen
 from avro import io, schema
 from kafka import KafkaProducer
 
+from app.config import settings
 from app.core.logging import get_logger
 
 
 logger = get_logger(__name__)
 
-_KAFKA_BROKERS = "localhost:9092"
-_SCHEMA_REGISTRY_URL = "http://localhost:8081"
-
 
 class SchemaRegistryClient:
-    def __init__(self, base_url: str = _SCHEMA_REGISTRY_URL) -> None:
-        self.base_url = base_url.rstrip("/")
+    def __init__(self, base_url: str | None = None) -> None:
+        self.base_url = (base_url or settings.SCHEMA_REGISTRY_URL).rstrip("/")
 
     def register_schema(self, subject: str, schema_str: str) -> int:
         payload = json.dumps({"schema": schema_str}).encode("utf-8")
@@ -44,10 +42,11 @@ class SchemaRegistryClient:
 class KafkaEventProducer:
     def __init__(
         self,
-        brokers: str = _KAFKA_BROKERS,
-        schema_registry_url: str = _SCHEMA_REGISTRY_URL,
+        brokers: str | None = None,
+        schema_registry_url: str | None = None,
     ) -> None:
-        self._producer = KafkaProducer(bootstrap_servers=brokers.split(","))
+        _brokers = brokers or settings.KAFKA_BROKERS
+        self._producer = KafkaProducer(bootstrap_servers=_brokers.split(","))
         self._registry = SchemaRegistryClient(schema_registry_url)
         self._schema_cache: dict[str, tuple[int, schema.Schema]] = {}
 

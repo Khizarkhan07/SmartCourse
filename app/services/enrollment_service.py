@@ -17,6 +17,7 @@ from app.workflows.course_completion_workflow import (
     CourseCompletionWorkflowInput,
 )
 from app.core.exceptions import NotFoundError, ValidationError, PermissionDeniedError
+from app.core.metrics import completions_total, workflow_failures_total
 from app.infrastructure.database.unit_of_work import UnitOfWork
 from app.repositories.course_repository import CourseRepository
 from app.repositories.enrollment_repository import EnrollmentRepository
@@ -182,8 +183,12 @@ async def _trigger_course_completion_if_needed(
             task_queue=ENROLLMENT_TASK_QUEUE,
             id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE,
         )
+        completions_total.inc()
     except WorkflowAlreadyStartedError:
         pass
+    except Exception:
+        workflow_failures_total.labels(workflow="completion").inc()
+        raise
 
 
 async def mark_lesson_complete(
