@@ -1,4 +1,6 @@
 services:
+
+  # ── App Database ────────────────────────────────────────────────────────────
   postgres:
     image: postgres:16
     container_name: smartcourse_postgres
@@ -7,9 +9,126 @@ services:
       POSTGRES_PASSWORD: smartcourse_pass
       POSTGRES_DB: smartcourse_db
     ports:
-      - "5433:5432"      # host_port:container_port (5433 avoids conflict with local postgres)
+      - "5433:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data   # persist data between restarts
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartcourse_user -d smartcourse_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Kafka Stack ─────────────────────────────────────────────────────────────
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    container_name: smartcourse_zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_log:/var/lib/zookeeper/log
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: smartcourse_kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"   # only the external listener port is exposed to the host
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+
+      # Two listeners on two separate ports:
+      #   PLAINTEXT      port 9092  — external; host machine connects here via localhost:9092
+      #   PLAINTEXT_INTERNAL  port 29092  — internal; other Docker containers use kafka:29092
+      # Without the split, Kafka returns kafka:9092 as the broker address to the host,
+      # which is unreachable outside Docker.
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_INTERNAL://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+
+      # Single-broker dev settings — replication factor of 1 is fine locally
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s   # Kafka takes ~20s to be ready after the process starts
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.6.0
+    container_name: smartcourse_schema_registry
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      # Uses the internal listener — Schema Registry is a container, not the host
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka:29092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+
+  # ── Temporal ────────────────────────────────────────────────────────────────
+  # These services are behind the "temporal-docker" profile.
+  # If Temporal is already running natively on localhost:7233, skip this profile —
+  # the app's TEMPORAL_HOST config already points there correctly.
+  # To use the Docker version instead: docker compose --profile temporal-docker up -d
+  temporal_postgres:
+    profiles: ["temporal-docker"]
+    image: postgres:16
+    container_name: smartcourse_temporal_postgres
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
+      POSTGRES_DB: temporal
+    volumes:
+      - temporal_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  temporal:
+    profiles: ["temporal-docker"]
+    image: temporalio/auto-setup:1.24
+    container_name: smartcourse_temporal
+    depends_on:
+      temporal_postgres:
+        condition: service_healthy
+    ports:
+      - "7233:7233"
+    environment:
+      # auto-setup handles schema migration automatically on first start
+      - DB=postgresql
+      - DB_PORT=5432
+      - POSTGRES_USER=temporal
+      - POSTGRES_PWD=temporal
+      - POSTGRES_SEEDS=temporal_postgres
+
+  # ── Prometheus Pushgateway ──────────────────────────────────────────────────
+  # Receives metric pushes from the Temporal worker (separate process).
+  # Scraped by Prometheus (added in Chunk 22D).
+  pushgateway:
+    image: prom/pushgateway:v1.8.0
+    container_name: smartcourse_pushgateway
+    ports:
+      - "9091:9091"
 
 volumes:
   postgres_data:
+  zookeeper_data:
+  zookeeper_log:
+  kafka_data:
+  temporal_postgres_data:

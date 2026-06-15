@@ -1,4 +1,5 @@
 
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import timedelta
@@ -59,57 +60,65 @@ async def create_enrollment_activity(student_id: str, course_id: str) -> str:
     This is the idempotency guarantee: calling this twice with the same
     student+course always returns the same enrollment_id.
     """
+    from app.core.metrics import activity_duration_seconds, push_metrics  # deferred — urllib blocked in sandbox
     from app.infrastructure.database import AsyncSessionLocal
     from app.models import Enrollment, EnrollmentStatus
-    
-    student_uuid = uuid.UUID(student_id)
-    course_uuid = uuid.UUID(course_id)
 
-    async with AsyncSessionLocal() as db:
-        stmt = (
-            insert(Enrollment)
-            .values(
-                student_id=student_uuid,
-                course_id=course_uuid,
-                status=EnrollmentStatus.enrolled,
-                progress_percentage=0,
-            )
-            .on_conflict_do_nothing(
-                index_elements=[Enrollment.student_id, Enrollment.course_id]
-            )
-            .returning(Enrollment.id)
-        )
+    _t0 = time.monotonic()
+    try:
+        student_uuid = uuid.UUID(student_id)
+        course_uuid = uuid.UUID(course_id)
 
-        insert_result = await db.execute(stmt)
-        enrollment_id = insert_result.scalar_one_or_none()
-
-        if enrollment_id is None:
-            existing_result = await db.execute(
-                select(Enrollment.id).where(
-                    (Enrollment.student_id == student_uuid)
-                    & (Enrollment.course_id == course_uuid)
+        async with AsyncSessionLocal() as db:
+            stmt = (
+                insert(Enrollment)
+                .values(
+                    student_id=student_uuid,
+                    course_id=course_uuid,
+                    status=EnrollmentStatus.enrolled,
+                    progress_percentage=0,
                 )
+                .on_conflict_do_nothing(
+                    index_elements=[Enrollment.student_id, Enrollment.course_id]
+                )
+                .returning(Enrollment.id)
             )
-            enrollment_id = existing_result.scalar_one()
-            await db.rollback()
-            logger.info(
-                "enrollment already exists",
-                activity="create_enrollment_activity",
-                student_id=student_id,
-                course_id=course_id,
-                enrollment_id=str(enrollment_id),
-            )
-            return str(enrollment_id)
 
-        await db.commit()
-    logger.info(
-        "enrollment created",
-        activity="create_enrollment_activity",
-        student_id=student_id,
-        course_id=course_id,
-        enrollment_id=str(enrollment_id),
-    )
-    return str(enrollment_id)
+            insert_result = await db.execute(stmt)
+            enrollment_id = insert_result.scalar_one_or_none()
+
+            if enrollment_id is None:
+                existing_result = await db.execute(
+                    select(Enrollment.id).where(
+                        (Enrollment.student_id == student_uuid)
+                        & (Enrollment.course_id == course_uuid)
+                    )
+                )
+                enrollment_id = existing_result.scalar_one()
+                await db.rollback()
+                logger.info(
+                    "enrollment already exists",
+                    activity="create_enrollment_activity",
+                    student_id=student_id,
+                    course_id=course_id,
+                    enrollment_id=str(enrollment_id),
+                )
+                return str(enrollment_id)
+
+            await db.commit()
+        logger.info(
+            "enrollment created",
+            activity="create_enrollment_activity",
+            student_id=student_id,
+            course_id=course_id,
+            enrollment_id=str(enrollment_id),
+        )
+        return str(enrollment_id)
+    finally:
+        activity_duration_seconds.labels(activity="create_enrollment_activity").observe(
+            time.monotonic() - _t0
+        )
+        await push_metrics()
 
 
 @activity.defn
@@ -123,21 +132,30 @@ async def send_enrollment_email_activity(email: str, course_title: str) -> str:
     This activity has a RetryPolicy configured in the workflow,
     so transient failures (email server down) are retried automatically.
     """
-    # TODO: Replace with real email provider call
-    logger.info(
-        "sending enrollment email",
-        activity="send_enrollment_email_activity",
-        email=email,
-        course_title=course_title,
-    )
-    message = f"Welcome email sent to {email} for course '{course_title}'"
-    logger.info(
-        "enrollment email sent",
-        activity="send_enrollment_email_activity",
-        email=email,
-        course_title=course_title,
-    )
-    return message
+    from app.core.metrics import activity_duration_seconds, push_metrics  # deferred — urllib blocked in sandbox
+
+    _t0 = time.monotonic()
+    try:
+        # TODO: Replace with real email provider call
+        logger.info(
+            "sending enrollment email",
+            activity="send_enrollment_email_activity",
+            email=email,
+            course_title=course_title,
+        )
+        message = f"Welcome email sent to {email} for course '{course_title}'"
+        logger.info(
+            "enrollment email sent",
+            activity="send_enrollment_email_activity",
+            email=email,
+            course_title=course_title,
+        )
+        return message
+    finally:
+        activity_duration_seconds.labels(activity="send_enrollment_email_activity").observe(
+            time.monotonic() - _t0
+        )
+        await push_metrics()
 
 
 @activity.defn
@@ -146,24 +164,32 @@ async def emit_enrollment_created_event_activity(
     student_id: str,
     course_id: str,
 ) -> None:
+    from app.core.metrics import activity_duration_seconds, push_metrics  # deferred — urllib blocked in sandbox
     from app.events import KafkaEventProducer
 
-    producer = KafkaEventProducer()
-    producer.emit_enrollment_created(
-        enrollment_id=enrollment_id,
-        student_id=student_id,
-        course_id=course_id,
-        status="enrolled",
-        progress_percentage=0,
-    )
+    _t0 = time.monotonic()
+    try:
+        producer = KafkaEventProducer()
+        producer.emit_enrollment_created(
+            enrollment_id=enrollment_id,
+            student_id=student_id,
+            course_id=course_id,
+            status="enrolled",
+            progress_percentage=0,
+        )
 
-    logger.info(
-        "enrollment.created event emitted",
-        activity="emit_enrollment_created_event_activity",
-        enrollment_id=enrollment_id,
-        student_id=student_id,
-        course_id=course_id,
-    )
+        logger.info(
+            "enrollment.created event emitted",
+            activity="emit_enrollment_created_event_activity",
+            enrollment_id=enrollment_id,
+            student_id=student_id,
+            course_id=course_id,
+        )
+    finally:
+        activity_duration_seconds.labels(activity="emit_enrollment_created_event_activity").observe(
+            time.monotonic() - _t0
+        )
+        await push_metrics()
 
 
 
