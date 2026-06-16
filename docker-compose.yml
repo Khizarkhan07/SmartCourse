@@ -119,12 +119,50 @@ services:
 
   # ── Prometheus Pushgateway ──────────────────────────────────────────────────
   # Receives metric pushes from the Temporal worker (separate process).
-  # Scraped by Prometheus (added in Chunk 22D).
   pushgateway:
     image: prom/pushgateway:v1.8.0
     container_name: smartcourse_pushgateway
     ports:
       - "9091:9091"
+
+  # ── Prometheus ──────────────────────────────────────────────────────────────
+  # Scrapes:
+  #   - smartcourse-api  → host.docker.internal:8000/metrics  (FastAPI on host)
+  #   - pushgateway      → pushgateway:9091                   (worker metrics)
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: smartcourse_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./provisioning/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    # host.docker.internal is built-in on Docker Desktop (Mac/Windows).
+    # On Linux add: extra_hosts: ["host.docker.internal:host-gateway"]
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    depends_on:
+      - pushgateway
+
+  # ── Grafana ─────────────────────────────────────────────────────────────────
+  # Prometheus datasource auto-provisioned via provisioning/grafana/datasources/
+  # Login: admin / admin
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: smartcourse_grafana
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./provisioning/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./provisioning/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+    depends_on:
+      - prometheus
 
 volumes:
   postgres_data:
@@ -132,3 +170,5 @@ volumes:
   zookeeper_log:
   kafka_data:
   temporal_postgres_data:
+  prometheus_data:
+  grafana_data:

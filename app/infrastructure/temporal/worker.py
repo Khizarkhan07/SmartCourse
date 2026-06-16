@@ -1,13 +1,3 @@
-"""Temporal worker setup and task queue registration.
-
-Run this module alongside FastAPI with:
-    python -m app.infrastructure.temporal.worker
-
-This keeps the worker listening for tasks from all three queues:
-- ENROLLMENT_TASK_QUEUE: Enrollment workflows and validation
-- COURSE_TASK_QUEUE: Course publishing and archival
-- NOTIFICATION_TASK_QUEUE: Async email and notification activities
-"""
 
 import asyncio
 from contextlib import AsyncExitStack
@@ -16,7 +6,6 @@ from temporalio.worker import Worker
 
 from app.config import settings
 from app.core.logging import configure_logging, get_logger
-from app.workflows.hello_workflow import HelloWorldWorkflow, say_hello, send_welcome_email
 from app.workflows.enrollment_workflow import (
     EnrollmentWorkflow,
     validate_enrollment_activity,
@@ -60,24 +49,15 @@ async def main():
         enrollment_task_queue=ENROLLMENT_TASK_QUEUE,
         course_task_queue=COURSE_TASK_QUEUE,
         notification_task_queue=NOTIFICATION_TASK_QUEUE,
-        enrollment_workflows=[
-            "HelloWorldWorkflow",
-            "EnrollmentWorkflow",
-            "CourseCompletionWorkflow",
-        ],
+        enrollment_workflows=["EnrollmentWorkflow", "CourseCompletionWorkflow"],
         course_workflows=["PublishCourseWorkflow", "ArchiveCourseWorkflow"],
-        enrollment_activities=[
-            "say_hello",
-            "validate_enrollment_activity",
-            "create_enrollment_activity",
-        ],
+        enrollment_activities=["validate_enrollment_activity", "create_enrollment_activity"],
         course_activities=[
             "validate_publish_activity",
             "transition_course_status_activity",
             "validate_archive_activity",
         ],
         notification_activities=[
-            "send_welcome_email",
             "send_enrollment_email_activity",
             "emit_enrollment_created_event_activity",
             "notify_enrolled_students_activity",
@@ -93,9 +73,8 @@ async def main():
             Worker(
                 client,
                 task_queue=ENROLLMENT_TASK_QUEUE,
-                workflows=[HelloWorldWorkflow, EnrollmentWorkflow, CourseCompletionWorkflow],
+                workflows=[EnrollmentWorkflow, CourseCompletionWorkflow],
                 activities=[
-                    say_hello,
                     validate_enrollment_activity,
                     create_enrollment_activity,
                 ],
@@ -120,7 +99,6 @@ async def main():
                 client,
                 task_queue=NOTIFICATION_TASK_QUEUE,
                 activities=[
-                    send_welcome_email,
                     send_enrollment_email_activity,
                     emit_enrollment_created_event_activity,
                     notify_enrolled_students_activity,
