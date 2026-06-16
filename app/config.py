@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
 
+    # Celery / RabbitMQ
+    RABBITMQ_URL: str = "amqp://guest:guest@localhost:5672/"
+
     class Config:
         env_file = ".env"
 

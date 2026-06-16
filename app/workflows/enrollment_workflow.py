@@ -133,24 +133,19 @@ async def send_enrollment_email_activity(email: str, course_title: str) -> str:
     so transient failures (email server down) are retried automatically.
     """
     from app.core.metrics import activity_duration_seconds, push_metrics  # deferred — urllib blocked in sandbox
+    from app.worker.tasks.email_tasks import send_welcome_email_task  # deferred — celery import safe outside sandbox
 
     _t0 = time.monotonic()
     try:
-        # TODO: Replace with real email provider call
+        # Dispatch to Celery — fire-and-forget, Celery handles retries independently
+        send_welcome_email_task.delay(email, course_title)
         logger.info(
-            "sending enrollment email",
+            "welcome email task dispatched",
             activity="send_enrollment_email_activity",
             email=email,
             course_title=course_title,
         )
-        message = f"Welcome email sent to {email} for course '{course_title}'"
-        logger.info(
-            "enrollment email sent",
-            activity="send_enrollment_email_activity",
-            email=email,
-            course_title=course_title,
-        )
-        return message
+        return f"Welcome email queued for {email}"
     finally:
         activity_duration_seconds.labels(activity="send_enrollment_email_activity").observe(
             time.monotonic() - _t0

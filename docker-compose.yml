@@ -132,6 +132,26 @@ services:
       timeout: 3s
       retries: 5
 
+  # ── RabbitMQ ────────────────────────────────────────────────────────────────
+  # Message broker for Celery task queue.
+  # Management UI at http://localhost:15672 (guest / guest)
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: smartcourse_rabbitmq
+    ports:
+      - "5672:5672"    # AMQP — Celery connects here
+      - "15672:15672"  # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # ── Prometheus Pushgateway ──────────────────────────────────────────────────
   # Receives metric pushes from the Temporal worker (separate process).
   pushgateway:
@@ -188,3 +208,4 @@ volumes:
   prometheus_data:
   grafana_data:
   redis_data:
+  rabbitmq_data:
