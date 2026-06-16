@@ -1,10 +1,16 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status, Request
+
 from fastapi.security import OAuth2PasswordRequestForm
 
-from app.infrastructure.database.unit_of_work import UnitOfWork, get_uow
-from app.services.user_service import get_user_by_email
-from app.core.security import verify_password, create_access_token
+from app.api.dependencies import get_current_user
 from app.core.limiter import limiter
+from app.core.security import create_access_token, decode_access_token, oauth2_scheme, verify_password
+from app.infrastructure.cache import blacklist_token
+from app.infrastructure.database.unit_of_work import UnitOfWork, get_uow
+from app.models.user import User
+from app.services.user_service import get_user_by_email
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -42,3 +48,23 @@ async def login(
     })
 
     return {"access_token": token, "token_type": "bearer"}
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(
+    token: str = Depends(oauth2_scheme),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Invalidate the current JWT token.
+    The token is blacklisted in Redis until it would have naturally expired.
+    Any subsequent request using this token receives 401.
+    """
+    payload = decode_access_token(token)
+    if payload:
+        jti: str | None = payload.get("jti")
+        exp: int | None = payload.get("exp")
+        if jti and exp:
+            ttl = int(exp - datetime.now(timezone.utc).timestamp())
+            if ttl > 0:
+                await blacklist_token(jti, ttl)

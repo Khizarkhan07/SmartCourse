@@ -24,6 +24,9 @@ class Settings(BaseSettings):
 
     PUSHGATEWAY_URL: str = "http://localhost:9091"
 
+    # Redis
+    REDIS_URL: str = "redis://localhost:6379/0"
+
     class Config:
         env_file = ".env"
 

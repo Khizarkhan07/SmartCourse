@@ -1,8 +1,9 @@
 from datetime import datetime, timedelta, timezone
 
+from app.infrastructure.cache import cache_get, cache_set
 from app.infrastructure.database.unit_of_work import UnitOfWork
-from app.repositories.analytics_repository import AnalyticsRepository
 from app.infrastructure.temporal import get_temporal_client
+from app.repositories.analytics_repository import AnalyticsRepository
 
 TRACKED_WORKFLOW_TYPES = {
     "EnrollmentWorkflow",
@@ -49,7 +50,14 @@ async def get_avg_time_to_complete_days(uow: UnitOfWork) -> float:
 
 
 async def get_most_popular_courses(uow: UnitOfWork, top_n: int = 5) -> list[dict]:
-    return await _analytics_repo(uow).most_popular_courses(top_n)
+    key = f"analytics:popular_courses:{top_n}"
+    cached = await cache_get(key)
+    if cached is not None:
+        return cached
+
+    result = await _analytics_repo(uow).most_popular_courses(top_n)
+    await cache_set(key, result, ttl=60)
+    return result
 
 
 async def get_avg_courses_per_student(uow: UnitOfWork) -> float:
@@ -62,8 +70,15 @@ async def get_avg_courses_per_student(uow: UnitOfWork) -> float:
 
 
 async def get_enrollments_over_time(uow: UnitOfWork, days: int = 30) -> list[dict]:
+    key = f"analytics:enrollments_over_time:{days}"
+    cached = await cache_get(key)
+    if cached is not None:
+        return cached
+
     since = datetime.now(timezone.utc) - timedelta(days=days)
-    return await _analytics_repo(uow).enrollments_over_time(since)
+    result = await _analytics_repo(uow).enrollments_over_time(since)
+    await cache_set(key, result, ttl=60)
+    return result
 
 
 async def get_failed_workflow_count() -> int:
@@ -87,7 +102,11 @@ async def get_failed_workflow_count() -> int:
 
 
 async def get_overview_metrics(uow: UnitOfWork) -> dict:
-    return {
+    cached = await cache_get("analytics:overview")
+    if cached is not None:
+        return cached
+
+    result = {
         "total_students": await get_total_students(uow),
         "total_instructors": await get_total_instructors(uow),
         "total_courses_published": await get_total_courses_published(uow),
@@ -98,3 +117,5 @@ async def get_overview_metrics(uow: UnitOfWork) -> dict:
         "failed_workflow_count": await get_failed_workflow_count(),
         "most_popular_courses": await get_most_popular_courses(uow, top_n=5),
     }
+    await cache_set("analytics:overview", result, ttl=60)
+    return result

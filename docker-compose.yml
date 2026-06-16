@@ -117,6 +117,21 @@ services:
       - POSTGRES_PWD=temporal
       - POSTGRES_SEEDS=temporal_postgres
 
+  # ── Redis ───────────────────────────────────────────────────────────────────
+  # Used for: analytics response cache, Redis-backed rate limiting, JWT blacklist
+  redis:
+    image: redis:7-alpine
+    container_name: smartcourse_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   # ── Prometheus Pushgateway ──────────────────────────────────────────────────
   # Receives metric pushes from the Temporal worker (separate process).
   pushgateway:
@@ -172,3 +187,4 @@ volumes:
   temporal_postgres_data:
   prometheus_data:
   grafana_data:
+  redis_data:

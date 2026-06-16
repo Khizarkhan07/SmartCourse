@@ -4,6 +4,7 @@ from typing import Callable
 from fastapi import Depends, HTTPException, status
 
 from app.core.security import decode_access_token, oauth2_scheme
+from app.infrastructure.cache import is_token_blacklisted
 from app.infrastructure.database.unit_of_work import UnitOfWork, get_uow
 from app.models.user import User, UserRole
 from app.services.user_service import get_user_by_id
@@ -21,6 +22,10 @@ async def get_current_user(
 
     payload = decode_access_token(token)
     if payload is None:
+        raise credentials_exception
+
+    jti: str | None = payload.get("jti")
+    if jti and await is_token_blacklisted(jti):
         raise credentials_exception
 
     user_id: str | None = payload.get("sub")
