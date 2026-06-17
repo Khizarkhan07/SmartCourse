@@ -6,6 +6,7 @@ from temporalio.worker import Worker
 
 from app.config import settings
 from app.core.logging import configure_logging, get_logger
+from app.core.tracing import configure_tracing
 from app.workflows.enrollment_workflow import (
     EnrollmentWorkflow,
     validate_enrollment_activity,
@@ -39,6 +40,7 @@ logger = get_logger(__name__)
 
 async def main():
     configure_logging()
+    configure_tracing()
 
     # Connect to the Temporal server
     client = await Client.connect(settings.TEMPORAL_HOST)

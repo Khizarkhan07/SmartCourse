@@ -8,6 +8,8 @@ from urllib.request import Request, urlopen
 
 from avro import io, schema
 from kafka import KafkaProducer
+from opentelemetry import trace
+from opentelemetry.propagate import inject
 
 from app.config import settings
 from app.core.logging import get_logger
@@ -81,10 +83,21 @@ class KafkaEventProducer:
         return out.getvalue()
 
     def _send(self, topic: str, key: str, schema_file_name: str, payload: dict) -> None:
+        # Inject W3C TraceContext into Kafka headers so consumers can link their
+        # spans back to the originating API request trace
+        carrier: dict[str, str] = {}
+        inject(carrier)
+        kafka_headers = [(k, v.encode("utf-8")) for k, v in carrier.items()]
+
+        # Populate trace_id in the event envelope for structured log correlation
+        span_ctx = trace.get_current_span().get_span_context()
+        if span_ctx.is_valid:
+            payload["trace_id"] = format(span_ctx.trace_id, "032x")
+
         subject = f"{topic}-value"
         schema_id, parsed_schema = self._load_schema(schema_file_name, subject)
         encoded_value = self._encode_value(schema_id, parsed_schema, payload)
-        self._producer.send(topic, key=key.encode("utf-8"), value=encoded_value)
+        self._producer.send(topic, key=key.encode("utf-8"), value=encoded_value, headers=kafka_headers)
         self._producer.flush(timeout=10)
 
         logger.info(

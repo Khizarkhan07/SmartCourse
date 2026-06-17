@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     # Celery / RabbitMQ
     RABBITMQ_URL: str = "amqp://guest:guest@localhost:5672/"
 
+    # OpenTelemetry
+    OTEL_SERVICE_NAME: str = "smartcourse-api"
+    OTEL_EXPORTER_OTLP_ENDPOINT: str = "http://localhost:4317"
+
     class Config:
         env_file = ".env"
 

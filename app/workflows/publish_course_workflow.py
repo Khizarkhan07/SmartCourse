@@ -235,22 +235,30 @@ async def emit_course_published_event_activity(
     instructor_id: str,
     course_title: str,
 ) -> None:
+    from opentelemetry import trace  # deferred — module must be imported after configure_tracing()
     from app.events import KafkaEventProducer
 
-    producer = KafkaEventProducer()
-    producer.emit_course_published(
-        course_id=course_id,
-        instructor_id=instructor_id,
-        title=course_title,
-    )
-
-    logger.info(
-        "course.published event emitted",
-        activity="emit_course_published_event_activity",
-        course_id=course_id,
-        instructor_id=instructor_id,
-        course_title=course_title,
-    )
+    tracer = trace.get_tracer(__name__)
+    with tracer.start_as_current_span(
+        "emit_course_published_event_activity",
+        kind=trace.SpanKind.PRODUCER,
+    ) as span:
+        span.set_attribute("course.id", course_id)
+        span.set_attribute("course.title", course_title)
+        span.set_attribute("instructor.id", instructor_id)
+        producer = KafkaEventProducer()
+        producer.emit_course_published(
+            course_id=course_id,
+            instructor_id=instructor_id,
+            title=course_title,
+        )
+        logger.info(
+            "course.published event emitted",
+            activity="emit_course_published_event_activity",
+            course_id=course_id,
+            instructor_id=instructor_id,
+            course_title=course_title,
+        )
 
 
 # ─────────────────────────────────────────────────────────

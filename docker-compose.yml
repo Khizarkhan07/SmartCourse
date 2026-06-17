@@ -152,6 +152,19 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── Jaeger ──────────────────────────────────────────────────────────────────
+  # All-in-one image: collector + query + UI in a single container.
+  # UI at http://localhost:16686
+  # OTLP gRPC collector on port 4317 (receives traces from the app)
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    container_name: smartcourse_jaeger
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "4317:4317"    # OTLP gRPC — app sends traces here
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+
   # ── Prometheus Pushgateway ──────────────────────────────────────────────────
   # Receives metric pushes from the Temporal worker (separate process).
   pushgateway:

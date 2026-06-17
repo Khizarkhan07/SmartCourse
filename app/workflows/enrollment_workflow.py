@@ -159,27 +159,35 @@ async def emit_enrollment_created_event_activity(
     student_id: str,
     course_id: str,
 ) -> None:
+    from opentelemetry import trace  # deferred — module must be imported after configure_tracing()
     from app.core.metrics import activity_duration_seconds, push_metrics  # deferred — urllib blocked in sandbox
     from app.events import KafkaEventProducer
 
+    tracer = trace.get_tracer(__name__)
     _t0 = time.monotonic()
     try:
-        producer = KafkaEventProducer()
-        producer.emit_enrollment_created(
-            enrollment_id=enrollment_id,
-            student_id=student_id,
-            course_id=course_id,
-            status="enrolled",
-            progress_percentage=0,
-        )
-
-        logger.info(
-            "enrollment.created event emitted",
-            activity="emit_enrollment_created_event_activity",
-            enrollment_id=enrollment_id,
-            student_id=student_id,
-            course_id=course_id,
-        )
+        with tracer.start_as_current_span(
+            "emit_enrollment_created_event_activity",
+            kind=trace.SpanKind.PRODUCER,
+        ) as span:
+            span.set_attribute("enrollment.id", enrollment_id)
+            span.set_attribute("student.id", student_id)
+            span.set_attribute("course.id", course_id)
+            producer = KafkaEventProducer()
+            producer.emit_enrollment_created(
+                enrollment_id=enrollment_id,
+                student_id=student_id,
+                course_id=course_id,
+                status="enrolled",
+                progress_percentage=0,
+            )
+            logger.info(
+                "enrollment.created event emitted",
+                activity="emit_enrollment_created_event_activity",
+                enrollment_id=enrollment_id,
+                student_id=student_id,
+                course_id=course_id,
+            )
     finally:
         activity_duration_seconds.labels(activity="emit_enrollment_created_event_activity").observe(
             time.monotonic() - _t0
