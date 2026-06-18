@@ -1,0 +1,11 @@
+services:
+
+  template:
+    build: .
+    container_name: smartcourse_template
+    ports:
+      - "8001:8000"
+    env_file: .env
+    environment:
+      SERVICE_NAME: template-service
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
