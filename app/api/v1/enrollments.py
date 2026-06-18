@@ -12,6 +12,7 @@ from app.api.dependencies import get_current_user, require_role
 from app.models.user import User, UserRole
 from app.infrastructure.temporal import ENROLLMENT_TASK_QUEUE, get_temporal_client
 from app.workflows.enrollment_workflow import EnrollmentWorkflow, EnrollmentWorkflowInput
+from app.core.metrics import enrollments_total, workflow_failures_total
 
 router = APIRouter(prefix="/enrollments", tags=["Enrollments"])
 
@@ -56,8 +57,12 @@ async def enroll_in_course(
             task_queue=ENROLLMENT_TASK_QUEUE,
             id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE,
         )
+        enrollments_total.inc()
     except WorkflowAlreadyStartedError:
         pass
+    except Exception:
+        workflow_failures_total.labels(workflow="enrollment").inc()
+        raise
 
     return OperationAcceptedResponse(
         operation_id=workflow_id,

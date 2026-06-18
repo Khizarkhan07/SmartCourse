@@ -1,12 +1,22 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+
 from app.api import register_exception_handlers
 from app.api.v1 import api_router
 from app.config import settings
 from app.core.limiter import limiter
+from app.core.tracing import configure_tracing
+from app.infrastructure.database import engine as db_engine
+
+configure_tracing()
 
 app = FastAPI(
     title="SmartCourse API",
@@ -42,4 +52,16 @@ async def health_check():
     return {"status": "ok"}
 
 
+@app.get("/metrics", include_in_schema=False)
+async def metrics():
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
 register_exception_handlers(app)
+
+# HTTP request instrumentation — Prometheus metrics per route
+Instrumentator().instrument(app)
+
+# OTel instrumentation — traces every HTTP request and DB query
+FastAPIInstrumentor.instrument_app(app)
+SQLAlchemyInstrumentor().instrument(engine=db_engine.sync_engine)

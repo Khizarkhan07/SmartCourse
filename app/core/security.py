@@ -1,5 +1,4 @@
-"""Core security functions: password hashing, JWT tokens, OAuth2 scheme."""
-
+import uuid
 import bcrypt
 from datetime import datetime, timedelta, timezone
 
@@ -37,9 +36,7 @@ def create_access_token(data: dict) -> str:
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode["exp"] = expire
-
-    # jwt.encode signs the payload with our SECRET_KEY
-    # Only someone with the SECRET_KEY can create a valid signature
+    to_encode["jti"] = str(uuid.uuid4())  # unique ID per token — used for blacklisting on logout
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 

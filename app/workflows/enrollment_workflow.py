@@ -1,10 +1,12 @@
 
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import timedelta
 
 from temporalio import activity, workflow
 from temporalio.common import RetryPolicy
+from app.core.logging import get_logger
 from app.infrastructure.temporal import NOTIFICATION_TASK_QUEUE
 from app.workflows.dependencies import (
     ApplicationError,
@@ -12,6 +14,8 @@ from app.workflows.dependencies import (
     select,
 )
 
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -39,7 +43,12 @@ async def validate_enrollment_activity(student_id: str, course_id: str) -> None:
                 f"Course '{course.title}' is not published", non_retryable=True
             )
 
-    print(f"[Activity] ✅ Validation passed for student {student_id} → course {course_id}")
+    logger.info(
+        "enrollment validation passed",
+        activity="validate_enrollment_activity",
+        student_id=student_id,
+        course_id=course_id,
+    )
 
 
 @activity.defn
@@ -51,45 +60,65 @@ async def create_enrollment_activity(student_id: str, course_id: str) -> str:
     This is the idempotency guarantee: calling this twice with the same
     student+course always returns the same enrollment_id.
     """
+    from app.core.metrics import activity_duration_seconds, push_metrics  # deferred — urllib blocked in sandbox
     from app.infrastructure.database import AsyncSessionLocal
     from app.models import Enrollment, EnrollmentStatus
-    
-    student_uuid = uuid.UUID(student_id)
-    course_uuid = uuid.UUID(course_id)
 
-    async with AsyncSessionLocal() as db:
-        stmt = (
-            insert(Enrollment)
-            .values(
-                student_id=student_uuid,
-                course_id=course_uuid,
-                status=EnrollmentStatus.enrolled,
-                progress_percentage=0,
-            )
-            .on_conflict_do_nothing(
-                index_elements=[Enrollment.student_id, Enrollment.course_id]
-            )
-            .returning(Enrollment.id)
-        )
+    _t0 = time.monotonic()
+    try:
+        student_uuid = uuid.UUID(student_id)
+        course_uuid = uuid.UUID(course_id)
 
-        insert_result = await db.execute(stmt)
-        enrollment_id = insert_result.scalar_one_or_none()
-
-        if enrollment_id is None:
-            existing_result = await db.execute(
-                select(Enrollment.id).where(
-                    (Enrollment.student_id == student_uuid)
-                    & (Enrollment.course_id == course_uuid)
+        async with AsyncSessionLocal() as db:
+            stmt = (
+                insert(Enrollment)
+                .values(
+                    student_id=student_uuid,
+                    course_id=course_uuid,
+                    status=EnrollmentStatus.enrolled,
+                    progress_percentage=0,
                 )
+                .on_conflict_do_nothing(
+                    index_elements=[Enrollment.student_id, Enrollment.course_id]
+                )
+                .returning(Enrollment.id)
             )
-            enrollment_id = existing_result.scalar_one()
-            await db.rollback()
-            print(f"[Activity] ↩️  Already enrolled, returning existing: {enrollment_id}")
-            return str(enrollment_id)
 
-        await db.commit()
-    print(f"[Activity] ✅ Enrollment created: {enrollment_id}")
-    return str(enrollment_id)
+            insert_result = await db.execute(stmt)
+            enrollment_id = insert_result.scalar_one_or_none()
+
+            if enrollment_id is None:
+                existing_result = await db.execute(
+                    select(Enrollment.id).where(
+                        (Enrollment.student_id == student_uuid)
+                        & (Enrollment.course_id == course_uuid)
+                    )
+                )
+                enrollment_id = existing_result.scalar_one()
+                await db.rollback()
+                logger.info(
+                    "enrollment already exists",
+                    activity="create_enrollment_activity",
+                    student_id=student_id,
+                    course_id=course_id,
+                    enrollment_id=str(enrollment_id),
+                )
+                return str(enrollment_id)
+
+            await db.commit()
+        logger.info(
+            "enrollment created",
+            activity="create_enrollment_activity",
+            student_id=student_id,
+            course_id=course_id,
+            enrollment_id=str(enrollment_id),
+        )
+        return str(enrollment_id)
+    finally:
+        activity_duration_seconds.labels(activity="create_enrollment_activity").observe(
+            time.monotonic() - _t0
+        )
+        await push_metrics()
 
 
 @activity.defn
@@ -103,11 +132,67 @@ async def send_enrollment_email_activity(email: str, course_title: str) -> str:
     This activity has a RetryPolicy configured in the workflow,
     so transient failures (email server down) are retried automatically.
     """
-    # TODO: Replace with real email provider call
-    print(f"[Activity] 📧 Sending welcome email to {email} for '{course_title}'")
-    message = f"Welcome email sent to {email} for course '{course_title}'"
-    print(f"[Activity] ✅ {message}")
-    return message
+    from app.core.metrics import activity_duration_seconds, push_metrics  # deferred — urllib blocked in sandbox
+    from app.worker.tasks.email_tasks import send_welcome_email_task  # deferred — celery import safe outside sandbox
+
+    _t0 = time.monotonic()
+    try:
+        # Dispatch to Celery — fire-and-forget, Celery handles retries independently
+        send_welcome_email_task.delay(email, course_title)
+        logger.info(
+            "welcome email task dispatched",
+            activity="send_enrollment_email_activity",
+            email=email,
+            course_title=course_title,
+        )
+        return f"Welcome email queued for {email}"
+    finally:
+        activity_duration_seconds.labels(activity="send_enrollment_email_activity").observe(
+            time.monotonic() - _t0
+        )
+        await push_metrics()
+
+
+@activity.defn
+async def emit_enrollment_created_event_activity(
+    enrollment_id: str,
+    student_id: str,
+    course_id: str,
+) -> None:
+    from opentelemetry import trace  # deferred — module must be imported after configure_tracing()
+    from app.core.metrics import activity_duration_seconds, push_metrics  # deferred — urllib blocked in sandbox
+    from app.events import KafkaEventProducer
+
+    tracer = trace.get_tracer(__name__)
+    _t0 = time.monotonic()
+    try:
+        with tracer.start_as_current_span(
+            "emit_enrollment_created_event_activity",
+            kind=trace.SpanKind.PRODUCER,
+        ) as span:
+            span.set_attribute("enrollment.id", enrollment_id)
+            span.set_attribute("student.id", student_id)
+            span.set_attribute("course.id", course_id)
+            producer = KafkaEventProducer()
+            producer.emit_enrollment_created(
+                enrollment_id=enrollment_id,
+                student_id=student_id,
+                course_id=course_id,
+                status="enrolled",
+                progress_percentage=0,
+            )
+            logger.info(
+                "enrollment.created event emitted",
+                activity="emit_enrollment_created_event_activity",
+                enrollment_id=enrollment_id,
+                student_id=student_id,
+                course_id=course_id,
+            )
+    finally:
+        activity_duration_seconds.labels(activity="emit_enrollment_created_event_activity").observe(
+            time.monotonic() - _t0
+        )
+        await push_metrics()
 
 
 
@@ -144,6 +229,19 @@ class EnrollmentWorkflow:
             send_enrollment_email_activity,
             args=[input.student_email, "SmartCourse"],   # course title placeholder
             start_to_close_timeout=timedelta(seconds=30),
+            task_queue=NOTIFICATION_TASK_QUEUE,
+            retry_policy=RetryPolicy(
+                initial_interval=timedelta(seconds=2),
+                backoff_coefficient=2.0,
+                maximum_attempts=3,
+            ),
+        )
+
+        # Step 4: Emit durable domain event to Kafka for downstream consumers
+        await workflow.execute_activity(
+            emit_enrollment_created_event_activity,
+            args=[enrollment_id, input.student_id, input.course_id],
+            start_to_close_timeout=timedelta(seconds=20),
             task_queue=NOTIFICATION_TASK_QUEUE,
             retry_policy=RetryPolicy(
                 initial_interval=timedelta(seconds=2),

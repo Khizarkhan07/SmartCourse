@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from temporalio import activity, workflow
 from temporalio.common import RetryPolicy
+from app.core.logging import get_logger
 from app.infrastructure.temporal import NOTIFICATION_TASK_QUEUE
 from app.workflows.dependencies import (
     ApplicationError,
@@ -11,6 +12,8 @@ from app.workflows.dependencies import (
     select,
 )
 
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -74,7 +77,13 @@ async def validate_publish_activity(course_id: str, instructor_id: str) -> str:
 
         course_title = course.title
 
-    print(f"[Activity] ✅ Validation passed for course '{course_title}'")
+    logger.info(
+        "publish validation passed",
+        activity="validate_publish_activity",
+        course_id=course_id,
+        instructor_id=instructor_id,
+        course_title=course_title,
+    )
     return course_title
 
 
@@ -109,7 +118,13 @@ async def validate_archive_activity(course_id: str, instructor_id: str) -> str:
 
         course_title = course.title
 
-    print(f"[Activity] ✅ Archive validation passed for course '{course_title}'")
+    logger.info(
+        "archive validation passed",
+        activity="validate_archive_activity",
+        course_id=course_id,
+        instructor_id=instructor_id,
+        course_title=course_title,
+    )
     return course_title
 
 
@@ -129,7 +144,12 @@ async def transition_course_status_activity(course_id: str, new_status: str) -> 
         course.status = CourseStatus(new_status)
         await db.commit()
 
-    print(f"[Activity] ✅ Course {course_id} status → {new_status}")
+    logger.info(
+        "course status transitioned",
+        activity="transition_course_status_activity",
+        course_id=course_id,
+        new_status=new_status,
+    )
 
 
 @activity.defn
@@ -141,10 +161,11 @@ async def notify_enrolled_students_activity(course_id: str, course_title: str) -
     Currently mocked — just logs and returns.
 
     Has a RetryPolicy in the workflow so transient failures are retried
-    from app.infrastructure.database import AsyncSessionLocal
-    
     without re-running the status transition.
     """
+    from app.infrastructure.database import AsyncSessionLocal
+    from app.models import Enrollment, User
+
     async with AsyncSessionLocal() as db:
         # JOIN enrollments → users to get student emails in one query
         result = await db.execute(
@@ -156,10 +177,22 @@ async def notify_enrolled_students_activity(course_id: str, course_title: str) -
 
     # TODO: replace with real email provider (SendGrid, SES, etc.)
     for email in student_emails:
-        print(f"[Activity] 📧 Sending publish notification to {email} for '{course_title}'")
+        logger.info(
+            "sending publish notification",
+            activity="notify_enrolled_students_activity",
+            course_id=course_id,
+            course_title=course_title,
+            email=email,
+        )
 
     student_count = len(student_emails)
-    print(f"[Activity] ✅ Notified {student_count} student(s)")
+    logger.info(
+        "publish notifications sent",
+        activity="notify_enrolled_students_activity",
+        course_id=course_id,
+        course_title=course_title,
+        student_count=student_count,
+    )
     return f"Notified {student_count} student(s) for course '{course_title}'"
 
 
@@ -177,11 +210,55 @@ async def notify_course_archived_activity(course_id: str, course_title: str) -> 
         student_emails = result.scalars().all()
 
     for email in student_emails:
-        print(f"[Activity] 📧 Sending archive notification to {email} for '{course_title}'")
+        logger.info(
+            "sending archive notification",
+            activity="notify_course_archived_activity",
+            course_id=course_id,
+            course_title=course_title,
+            email=email,
+        )
 
     student_count = len(student_emails)
-    print(f"[Activity] ✅ Archive notification sent to {student_count} student(s)")
+    logger.info(
+        "archive notifications sent",
+        activity="notify_course_archived_activity",
+        course_id=course_id,
+        course_title=course_title,
+        student_count=student_count,
+    )
     return f"Archive notification sent to {student_count} student(s) for course '{course_title}'"
+
+
+@activity.defn
+async def emit_course_published_event_activity(
+    course_id: str,
+    instructor_id: str,
+    course_title: str,
+) -> None:
+    from opentelemetry import trace  # deferred — module must be imported after configure_tracing()
+    from app.events import KafkaEventProducer
+
+    tracer = trace.get_tracer(__name__)
+    with tracer.start_as_current_span(
+        "emit_course_published_event_activity",
+        kind=trace.SpanKind.PRODUCER,
+    ) as span:
+        span.set_attribute("course.id", course_id)
+        span.set_attribute("course.title", course_title)
+        span.set_attribute("instructor.id", instructor_id)
+        producer = KafkaEventProducer()
+        producer.emit_course_published(
+            course_id=course_id,
+            instructor_id=instructor_id,
+            title=course_title,
+        )
+        logger.info(
+            "course.published event emitted",
+            activity="emit_course_published_event_activity",
+            course_id=course_id,
+            instructor_id=instructor_id,
+            course_title=course_title,
+        )
 
 
 # ─────────────────────────────────────────────────────────
@@ -220,6 +297,19 @@ class PublishCourseWorkflow:
             notify_enrolled_students_activity,
             args=[input.course_id, course_title],
             start_to_close_timeout=timedelta(seconds=30),
+            task_queue=NOTIFICATION_TASK_QUEUE,
+            retry_policy=RetryPolicy(
+                initial_interval=timedelta(seconds=2),
+                backoff_coefficient=2.0,
+                maximum_attempts=3,
+            ),
+        )
+
+        # Step 4: Emit durable domain event to Kafka for downstream consumers
+        await workflow.execute_activity(
+            emit_course_published_event_activity,
+            args=[input.course_id, input.instructor_id, course_title],
+            start_to_close_timeout=timedelta(seconds=20),
             task_queue=NOTIFICATION_TASK_QUEUE,
             retry_policy=RetryPolicy(
                 initial_interval=timedelta(seconds=2),

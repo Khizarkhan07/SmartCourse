@@ -13,6 +13,7 @@ from app.workflows.publish_course_workflow import (
     PublishCourseWorkflow,
     PublishCourseWorkflowInput,
 )
+from app.core.metrics import workflow_failures_total
 
 router = APIRouter(prefix="/courses", tags=["Publishing"])
 
@@ -50,6 +51,9 @@ async def publish_course(
         )
     except WorkflowAlreadyStartedError:
         pass
+    except Exception:
+        workflow_failures_total.labels(workflow="publish").inc()
+        raise
 
     return OperationAcceptedResponse(
         operation_id=workflow_id,
@@ -89,6 +93,9 @@ async def archive_course(
         )
     except WorkflowAlreadyStartedError:
         pass
+    except Exception:
+        workflow_failures_total.labels(workflow="archive").inc()
+        raise
 
     return OperationAcceptedResponse(
         operation_id=workflow_id,
