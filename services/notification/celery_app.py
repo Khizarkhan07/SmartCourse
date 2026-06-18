@@ -1,14 +1,12 @@
 from celery import Celery
 
-from app.config import settings
+from config import settings
 
 celery_app = Celery(
-    "smartcourse",
+    "notification",
     broker=settings.RABBITMQ_URL,
-    backend=settings.REDIS_URL,  # stores task results in Redis
-    include=[
-        "app.worker.tasks.analytics_tasks",
-    ],
+    backend=settings.REDIS_URL,
+    include=["tasks.email_tasks"],
 )
 
 celery_app.conf.update(
@@ -19,7 +17,6 @@ celery_app.conf.update(
     enable_utc=True,
     result_expires=3600,
     task_routes={
-        "analytics.*": {"queue": "monolith"},
         "email.*": {"queue": "notification"},
     },
 )

@@ -1,0 +1,13 @@
+services:
+
+  notification:
+    build: .
+    container_name: smartcourse_notification
+    env_file: .env
+    environment:
+      SERVICE_NAME: notification-service
+      RABBITMQ_URL: amqp://guest:guest@smartcourse_rabbitmq:5672/
+      REDIS_URL: redis://smartcourse_redis:6379/0
+    depends_on:
+      - rabbitmq
+      - redis
