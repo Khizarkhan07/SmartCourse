@@ -1,0 +1,19 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+
+  # FastAPI app — runs on the host, not in Docker
+  # host.docker.internal resolves to the host machine from inside a container
+  - job_name: smartcourse-api
+    static_configs:
+      - targets: ["host.docker.internal:8000"]
+    metrics_path: /metrics
+
+  # Pushgateway — receives metric pushes from the Temporal worker
+  # honor_labels: true preserves the original job/activity labels from the push
+  - job_name: pushgateway
+    honor_labels: true
+    static_configs:
+      - targets: ["pushgateway:9091"]
