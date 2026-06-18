@@ -16,6 +16,7 @@ class CourseCompletionWorkflowInput:
     enrollment_id: str
     student_id: str
     student_email: str
+    student_name: str
     course_id: str
     course_title: str
 
@@ -36,6 +37,42 @@ async def send_course_completion_email_activity(
     return message
 
 
+@activity.defn
+async def emit_enrollment_completed_event_activity(
+    enrollment_id: str,
+    student_id: str,
+    student_name: str,
+    course_id: str,
+    course_title: str,
+) -> None:
+    from opentelemetry import trace
+    from app.events import KafkaEventProducer
+
+    tracer = trace.get_tracer(__name__)
+    with tracer.start_as_current_span(
+        "emit_enrollment_completed_event_activity",
+        kind=trace.SpanKind.PRODUCER,
+    ) as span:
+        span.set_attribute("enrollment.id", enrollment_id)
+        span.set_attribute("student.id", student_id)
+        span.set_attribute("course.id", course_id)
+        producer = KafkaEventProducer()
+        producer.emit_enrollment_completed(
+            enrollment_id=enrollment_id,
+            student_id=student_id,
+            student_name=student_name,
+            course_id=course_id,
+            course_title=course_title,
+        )
+        logger.info(
+            "enrollment.completed event emitted",
+            activity="emit_enrollment_completed_event_activity",
+            enrollment_id=enrollment_id,
+            student_id=student_id,
+            course_id=course_id,
+        )
+
+
 @workflow.defn
 class CourseCompletionWorkflow:
     @workflow.run
@@ -44,6 +81,24 @@ class CourseCompletionWorkflow:
             send_course_completion_email_activity,
             args=[input.student_email, input.course_title],
             start_to_close_timeout=timedelta(seconds=30),
+            task_queue=NOTIFICATION_TASK_QUEUE,
+            retry_policy=RetryPolicy(
+                initial_interval=timedelta(seconds=2),
+                backoff_coefficient=2.0,
+                maximum_attempts=3,
+            ),
+        )
+
+        await workflow.execute_activity(
+            emit_enrollment_completed_event_activity,
+            args=[
+                input.enrollment_id,
+                input.student_id,
+                input.student_name,
+                input.course_id,
+                input.course_title,
+            ],
+            start_to_close_timeout=timedelta(seconds=20),
             task_queue=NOTIFICATION_TASK_QUEUE,
             retry_policy=RetryPolicy(
                 initial_interval=timedelta(seconds=2),

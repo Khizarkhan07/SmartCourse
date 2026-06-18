@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     # Backend service URLs (Docker internal network)
     MONOLITH_URL: str = "http://host.docker.internal:8000"
     TEMPLATE_URL: str = "http://smartcourse_template:8000"
+    CERTIFICATE_URL: str = "http://smartcourse_certificate:8000"
 
     class Config:
         env_file = ".env"
@@ -19,5 +20,5 @@ settings = Settings()
 # Route table: first path segment → backend base URL
 # Add a new entry here each time a service is extracted from the monolith.
 ROUTE_TABLE: dict[str, str] = {
-    "template": settings.TEMPLATE_URL,   # test route — remove after chunk 3
+    "certificates": settings.CERTIFICATE_URL,
 }

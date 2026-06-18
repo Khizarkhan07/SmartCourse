@@ -176,6 +176,7 @@ async def _trigger_course_completion_if_needed(
                 enrollment_id=str(enrollment.id),
                 student_id=str(enrollment.student_id),
                 student_email=student.email,
+                student_name=student.name,
                 course_id=str(enrollment.course_id),
                 course_title=course.title,
             ),

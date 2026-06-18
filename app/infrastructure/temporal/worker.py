@@ -27,6 +27,7 @@ from app.workflows.publish_course_workflow import (
 from app.workflows.course_completion_workflow import (
     CourseCompletionWorkflow,
     send_course_completion_email_activity,
+    emit_enrollment_completed_event_activity,
 )
 from app.infrastructure.temporal.client import (
     COURSE_TASK_QUEUE,
@@ -107,6 +108,7 @@ async def main():
                     notify_course_archived_activity,
                     emit_course_published_event_activity,
                     send_course_completion_email_activity,
+                    emit_enrollment_completed_event_activity,
                 ],
             )
         )

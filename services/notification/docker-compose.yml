@@ -1,7 +1,7 @@
 services:
 
   notification:
-    build: .
+    build: services/notification
     container_name: smartcourse_notification
     env_file: .env
     environment:

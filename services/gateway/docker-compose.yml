@@ -1,7 +1,7 @@
 services:
 
   gateway:
-    build: .
+    build: services/gateway
     container_name: smartcourse_gateway
     ports:
       - "8080:8080"
@@ -10,4 +10,4 @@ services:
       SERVICE_NAME: gateway
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
       MONOLITH_URL: http://host.docker.internal:8000
-      TEMPLATE_URL: http://smartcourse_template:8000
+      CERTIFICATE_URL: http://smartcourse_certificate:8000

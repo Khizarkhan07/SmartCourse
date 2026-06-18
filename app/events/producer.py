@@ -160,3 +160,30 @@ class KafkaEventProducer:
             },
         }
         self._send("course.published", course_id, "course_published.avsc", event)
+
+    def emit_enrollment_completed(
+        self,
+        enrollment_id: str,
+        student_id: str,
+        student_name: str,
+        course_id: str,
+        course_title: str,
+    ) -> None:
+        completed_at = datetime.now(timezone.utc).isoformat()
+        event = {
+            "event_id": str(uuid.uuid4()),
+            "event_type": "enrollment.completed",
+            "event_version": 1,
+            "occurred_at": completed_at,
+            "producer": "smartcourse-api",
+            "trace_id": "",
+            "payload": {
+                "enrollment_id": enrollment_id,
+                "student_id": student_id,
+                "student_name": student_name,
+                "course_id": course_id,
+                "course_title": course_title,
+                "completed_at": completed_at,
+            },
+        }
+        self._send("enrollment.completed", enrollment_id, "enrollment_completed.avsc", event)
