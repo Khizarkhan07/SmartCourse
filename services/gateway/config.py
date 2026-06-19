@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     MONOLITH_URL: str = "http://host.docker.internal:8000"
     TEMPLATE_URL: str = "http://smartcourse_template:8000"
     CERTIFICATE_URL: str = "http://smartcourse_certificate:8000"
+    ANALYTICS_URL: str = "http://smartcourse_analytics:8000"
 
     class Config:
         env_file = ".env"
@@ -21,4 +22,5 @@ settings = Settings()
 # Add a new entry here each time a service is extracted from the monolith.
 ROUTE_TABLE: dict[str, str] = {
     "certificates": settings.CERTIFICATE_URL,
+    "analytics": settings.ANALYTICS_URL,
 }
