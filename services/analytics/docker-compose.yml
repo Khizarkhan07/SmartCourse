@@ -34,5 +34,21 @@ services:
       analytics-db:
         condition: service_healthy
 
+  analytics-consumer:
+    build: services/analytics
+    container_name: smartcourse_analytics_consumer
+    command: python -m events.runner
+    env_file: .env
+    environment:
+      SERVICE_NAME: analytics-consumer
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      DATABASE_URL: postgresql+asyncpg://analytics_user:analytics_pass@analytics-db:5432/analytics_db
+      DATABASE_URL_SYNC: postgresql+psycopg2://analytics_user:analytics_pass@analytics-db:5432/analytics_db
+      KAFKA_BROKERS: kafka:29092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
+    depends_on:
+      analytics-db:
+        condition: service_healthy
+
 volumes:
   analytics_db_data:
