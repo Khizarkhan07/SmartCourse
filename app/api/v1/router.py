@@ -1,7 +1,6 @@
 from fastapi import APIRouter
 
 from . import (
-    analytics,
     auth,
     courses,
     enrollments,
@@ -21,4 +20,3 @@ api_router.include_router(modules.router)
 api_router.include_router(lessons.router)
 api_router.include_router(publishing.router)
 api_router.include_router(operations.router)
-api_router.include_router(analytics.router)

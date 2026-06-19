@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     DATABASE_URL_SYNC: str = "postgresql+psycopg2://analytics_user:analytics_pass@localhost:5435/analytics_db"
     KAFKA_BROKERS: str = "localhost:9092"
     SCHEMA_REGISTRY_URL: str = "http://localhost:8081"
+    SECRET_KEY: str = "dev-secret-key-change-in-production"
+    ALGORITHM: str = "HS256"
+    REDIS_URL: str = "redis://localhost:6379/0"
+    TEMPORAL_HOST: str = "localhost:7233"
 
     class Config:
         env_file = ".env"
