@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     SCHEMA_REGISTRY_URL: str = "http://localhost:8081"
     SECRET_KEY: str = "dev-secret-key-change-in-production"
     ALGORITHM: str = "HS256"
+    REDIS_URL: str = "redis://localhost:6379/0"
 
     class Config:
         env_file = ".env"

@@ -31,6 +31,7 @@ services:
       KAFKA_BROKERS: kafka:29092
       SCHEMA_REGISTRY_URL: http://schema-registry:8081
       SECRET_KEY: dev-secret-key-change-in-production
+      REDIS_URL: redis://redis:6379/0
     depends_on:
       certificate-db:
         condition: service_healthy
