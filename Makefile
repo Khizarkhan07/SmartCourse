@@ -5,6 +5,7 @@ NOTIFY   := -f services/notification/docker-compose.yml
 CERT     := -f services/certificate/docker-compose.yml
 ANALYTICS := -f services/analytics/docker-compose.yml
 IDENTITY  := -f services/identity/docker-compose.yml
+COURSE    := -f services/course/docker-compose.yml
 
 # ── Shared infra only (Kafka, Redis, RabbitMQ, Jaeger, etc.) ──────────────────
 infra-up:
@@ -22,27 +23,27 @@ down:
 
 # ── Rebuild all service images ────────────────────────────────────────────────
 build:
-	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) $(IDENTITY) build
+	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) $(IDENTITY) $(COURSE) build
 
 # ── Rebuild + restart a single service ────────────────────────────────────────
 # Example: make rebuild SVC=certificate
 rebuild:
-	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) $(IDENTITY) up -d --build $(SVC)
+	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) $(IDENTITY) $(COURSE) up -d --build $(SVC)
 
 # ── Full stack: infra + monolith + all microservices ──────────────────────────
 stack-up:
-	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) $(IDENTITY) up -d
+	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) $(IDENTITY) $(COURSE) up -d
 
 stack-down:
-	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) $(IDENTITY) down
+	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) $(IDENTITY) $(COURSE) down
 
 # ── Add a microservice alongside the full stack ────────────────────────────────
 # Example: make svc-up SVC=notification
 svc-up:
-	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) $(IDENTITY) -f services/$(SVC)/docker-compose.yml up -d
+	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) $(IDENTITY) $(COURSE) -f services/$(SVC)/docker-compose.yml up -d
 
 svc-down:
-	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) $(IDENTITY) -f services/$(SVC)/docker-compose.yml down
+	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) $(IDENTITY) $(COURSE) -f services/$(SVC)/docker-compose.yml down
 
 logs:
-	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) $(IDENTITY) logs -f
+	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) $(IDENTITY) $(COURSE) logs -f

@@ -1,0 +1,37 @@
+services:
+
+  course-db:
+    image: postgres:16
+    container_name: smartcourse_course_db
+    environment:
+      POSTGRES_USER: course_user
+      POSTGRES_PASSWORD: course_pass
+      POSTGRES_DB: course_db
+    ports:
+      - "5437:5432"
+    volumes:
+      - course_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U course_user -d course_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  course:
+    build: services/course
+    container_name: smartcourse_course
+    ports:
+      - "8005:8000"
+    env_file: .env
+    environment:
+      SERVICE_NAME: course-service
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      DATABASE_URL: postgresql+asyncpg://course_user:course_pass@course-db:5432/course_db
+      DATABASE_URL_SYNC: postgresql+psycopg2://course_user:course_pass@course-db:5432/course_db
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      course-db:
+        condition: service_healthy
+
+volumes:
+  course_db_data:

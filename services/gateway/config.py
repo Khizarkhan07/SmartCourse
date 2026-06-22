@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     CERTIFICATE_URL: str = "http://smartcourse_certificate:8000"
     ANALYTICS_URL: str = "http://smartcourse_analytics:8000"
     IDENTITY_URL: str = "http://smartcourse_identity:8000"
+    COURSE_URL: str = "http://smartcourse_course:8000"
 
     class Config:
         env_file = ".env"
@@ -27,4 +28,8 @@ ROUTE_TABLE: dict[str, str] = {
     "identity": settings.IDENTITY_URL,
     "auth": settings.IDENTITY_URL,
     "users": settings.IDENTITY_URL,
+    "courses": settings.COURSE_URL,
+    "modules": settings.COURSE_URL,
+    "lessons": settings.COURSE_URL,
+    "publishing": settings.COURSE_URL,
 }
