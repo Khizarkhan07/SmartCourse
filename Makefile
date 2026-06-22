@@ -4,6 +4,7 @@ GATEWAY  := -f services/gateway/docker-compose.yml
 NOTIFY   := -f services/notification/docker-compose.yml
 CERT     := -f services/certificate/docker-compose.yml
 ANALYTICS := -f services/analytics/docker-compose.yml
+IDENTITY  := -f services/identity/docker-compose.yml
 
 # ── Shared infra only (Kafka, Redis, RabbitMQ, Jaeger, etc.) ──────────────────
 infra-up:
@@ -21,19 +22,19 @@ down:
 
 # ── Rebuild all service images ────────────────────────────────────────────────
 build:
-	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) build
+	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) $(IDENTITY) build
 
 # ── Rebuild + restart a single service ────────────────────────────────────────
 # Example: make rebuild SVC=certificate
 rebuild:
-	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) up -d --build $(SVC)
+	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) $(IDENTITY) up -d --build $(SVC)
 
 # ── Full stack: infra + monolith + all microservices ──────────────────────────
 stack-up:
-	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) up -d
+	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) $(IDENTITY) up -d
 
 stack-down:
-	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) down
+	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) $(IDENTITY) down
 
 # ── Add a microservice alongside the full stack ────────────────────────────────
 # Example: make svc-up SVC=notification
@@ -44,4 +45,4 @@ svc-down:
 	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) -f services/$(SVC)/docker-compose.yml down
 
 logs:
-	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) logs -f
+	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) $(IDENTITY) logs -f

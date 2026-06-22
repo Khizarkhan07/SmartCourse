@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     TEMPLATE_URL: str = "http://smartcourse_template:8000"
     CERTIFICATE_URL: str = "http://smartcourse_certificate:8000"
     ANALYTICS_URL: str = "http://smartcourse_analytics:8000"
+    IDENTITY_URL: str = "http://smartcourse_identity:8000"
 
     class Config:
         env_file = ".env"
@@ -23,4 +24,5 @@ settings = Settings()
 ROUTE_TABLE: dict[str, str] = {
     "certificates": settings.CERTIFICATE_URL,
     "analytics": settings.ANALYTICS_URL,
+    "identity": settings.IDENTITY_URL,
 }

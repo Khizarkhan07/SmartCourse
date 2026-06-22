@@ -1,0 +1,36 @@
+services:
+
+  identity-db:
+    image: postgres:16
+    container_name: smartcourse_identity_db
+    environment:
+      POSTGRES_USER: identity_user
+      POSTGRES_PASSWORD: identity_pass
+      POSTGRES_DB: identity_db
+    ports:
+      - "5436:5432"
+    volumes:
+      - identity_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U identity_user -d identity_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  identity:
+    build: services/identity
+    container_name: smartcourse_identity
+    ports:
+      - "8004:8000"
+    env_file: .env
+    environment:
+      SERVICE_NAME: identity-service
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      DATABASE_URL: postgresql+asyncpg://identity_user:identity_pass@identity-db:5432/identity_db
+      DATABASE_URL_SYNC: postgresql+psycopg2://identity_user:identity_pass@identity-db:5432/identity_db
+    depends_on:
+      identity-db:
+        condition: service_healthy
+
+volumes:
+  identity_db_data:
