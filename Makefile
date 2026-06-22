@@ -39,10 +39,10 @@ stack-down:
 # ── Add a microservice alongside the full stack ────────────────────────────────
 # Example: make svc-up SVC=notification
 svc-up:
-	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) -f services/$(SVC)/docker-compose.yml up -d
+	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) $(IDENTITY) -f services/$(SVC)/docker-compose.yml up -d
 
 svc-down:
-	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) -f services/$(SVC)/docker-compose.yml down
+	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) $(IDENTITY) -f services/$(SVC)/docker-compose.yml down
 
 logs:
 	docker compose $(INFRA) $(MONOLITH) $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) $(IDENTITY) logs -f

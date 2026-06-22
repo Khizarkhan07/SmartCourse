@@ -28,6 +28,7 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
       DATABASE_URL: postgresql+asyncpg://identity_user:identity_pass@identity-db:5432/identity_db
       DATABASE_URL_SYNC: postgresql+psycopg2://identity_user:identity_pass@identity-db:5432/identity_db
+      REDIS_URL: redis://redis:6379/0
     depends_on:
       identity-db:
         condition: service_healthy

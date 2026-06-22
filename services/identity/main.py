@@ -3,6 +3,8 @@ from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from sqlalchemy import text
 
+from api.routes.auth import router as auth_router
+from api.routes.users import router as users_router
 from config import settings
 from core.logging import configure_logging, get_logger
 from core.tracing import configure_tracing
@@ -24,5 +26,8 @@ async def health_check():
     logger.info("health check", service=settings.SERVICE_NAME)
     return {"status": "ok", "service": settings.SERVICE_NAME}
 
+
+app.include_router(auth_router)
+app.include_router(users_router)
 
 FastAPIInstrumentor.instrument_app(app)
