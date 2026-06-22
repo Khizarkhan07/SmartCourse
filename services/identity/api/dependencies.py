@@ -11,7 +11,7 @@ from repositories.user_repository import UserRepository
 
 # OAuth2PasswordBearer lets Swagger show a username/password login form
 # that hits /auth/login directly — correct for the service that issues tokens.
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
 
 async def get_repo() -> UserRepository:

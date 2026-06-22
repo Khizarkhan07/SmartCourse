@@ -11,7 +11,7 @@ from services import user_service
 router = APIRouter(tags=["Users"])
 
 
-@router.post("/users", response_model=UserResponse, status_code=201)
+@router.post("/", response_model=UserResponse, status_code=201)
 async def register_user(
     data: UserCreate,
     repo: UserRepository = Depends(get_repo),
@@ -19,7 +19,7 @@ async def register_user(
     return await user_service.create_user(repo, data)
 
 
-@router.get("/users", response_model=list[UserResponse])
+@router.get("/", response_model=list[UserResponse])
 async def list_users(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
@@ -29,7 +29,7 @@ async def list_users(
     return await user_service.list_users(repo, limit=limit, offset=offset)
 
 
-@router.get("/users/{user_id}", response_model=UserResponse)
+@router.get("/{user_id}", response_model=UserResponse)
 async def get_user(
     user_id: uuid.UUID,
     repo: UserRepository = Depends(get_repo),
@@ -38,7 +38,7 @@ async def get_user(
     return await user_service.get_user_by_id(repo, user_id)
 
 
-@router.patch("/users/{user_id}/role", response_model=UserResponse)
+@router.patch("/{user_id}/role", response_model=UserResponse)
 async def update_user_role(
     user_id: uuid.UUID,
     body: UserRoleUpdate,
@@ -48,7 +48,7 @@ async def update_user_role(
     return await user_service.update_user_role(repo, user_id, body.role)
 
 
-@router.delete("/users/{user_id}", response_model=UserResponse)
+@router.delete("/{user_id}", response_model=UserResponse)
 async def delete_user(
     user_id: uuid.UUID,
     repo: UserRepository = Depends(get_repo),

@@ -25,4 +25,6 @@ ROUTE_TABLE: dict[str, str] = {
     "certificates": settings.CERTIFICATE_URL,
     "analytics": settings.ANALYTICS_URL,
     "identity": settings.IDENTITY_URL,
+    "auth": settings.IDENTITY_URL,
+    "users": settings.IDENTITY_URL,
 }

@@ -13,7 +13,7 @@ from services.user_service import get_user_by_email
 router = APIRouter(tags=["Auth"])
 
 
-@router.post("/auth/login")
+@router.post("/login")
 async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     repo: UserRepository = Depends(get_repo),
@@ -28,11 +28,11 @@ async def login(
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is deactivated")
 
-    token = create_access_token({"sub": str(user.id), "role": user.role.value})
+    token = create_access_token({"sub": str(user.id), "role": user.role.value, "email": user.email})
     return {"access_token": token, "token_type": "bearer"}
 
 
-@router.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(
     token: str = Depends(oauth2_scheme),
     current_user: User = Depends(get_current_user),

@@ -3,14 +3,14 @@ import bcrypt
 from datetime import datetime, timedelta, timezone
 
 from jose import jwt, JWTError
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPBearer
 
 from app.config import settings
 
-# This tells FastAPI:
-# "Protected routes expect a Bearer token at /auth/login"
-# It also adds a padlock icon on those routes in /docs so you can test auth there
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+# HTTPBearer: monolith no longer issues tokens — identity-service does.
+# Swagger shows "paste your token here" instead of a login form.
+# Get a token from localhost:8080/auth/login then paste it in.
+oauth2_scheme = HTTPBearer()
 
 
 def hash_password(plain_password: str) -> str:
