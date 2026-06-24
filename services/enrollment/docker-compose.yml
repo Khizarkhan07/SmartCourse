@@ -1,0 +1,40 @@
+services:
+
+  enrollment-db:
+    image: postgres:16
+    container_name: smartcourse_enrollment_db
+    environment:
+      POSTGRES_USER: enrollment_user
+      POSTGRES_PASSWORD: enrollment_pass
+      POSTGRES_DB: enrollment_db
+    ports:
+      - "5438:5432"
+    volumes:
+      - enrollment_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U enrollment_user -d enrollment_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  enrollment:
+    build: services/enrollment
+    container_name: smartcourse_enrollment
+    ports:
+      - "8006:8000"
+    env_file: .env
+    environment:
+      SERVICE_NAME: enrollment-service
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      DATABASE_URL: postgresql+asyncpg://enrollment_user:enrollment_pass@enrollment-db:5432/enrollment_db
+      DATABASE_URL_SYNC: postgresql+psycopg2://enrollment_user:enrollment_pass@enrollment-db:5432/enrollment_db
+      REDIS_URL: redis://redis:6379/0
+      KAFKA_BROKERS: kafka:29092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      TEMPORAL_HOST: host.docker.internal:7233
+    depends_on:
+      enrollment-db:
+        condition: service_healthy
+
+volumes:
+  enrollment_db_data:
