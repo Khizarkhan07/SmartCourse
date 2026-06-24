@@ -2,8 +2,21 @@ import uuid
 from datetime import datetime
 from pydantic import BaseModel
 from app.models.enrollment import EnrollmentStatus
+from app.models.course import CourseStatus
 from app.schemas.user import UserResponse
-from app.schemas.course import CourseResponse
+
+
+class CourseInEnrollmentResponse(BaseModel):
+    """Minimal course snapshot embedded in enrollment responses.
+    Reads from the monolith's courses table (legacy rows only).
+    New courses live in course-service — enrollment will cross-service-validate in Chunk 23.
+    """
+    id: uuid.UUID
+    title: str
+    status: CourseStatus
+    instructor_id: uuid.UUID
+
+    model_config = {"from_attributes": True}
 
 
 # --- Input Schemas ---
@@ -29,7 +42,7 @@ class EnrollmentResponse(BaseModel):
     status: EnrollmentStatus
     progress_percentage: int
     student: UserResponse  # nested — returns full student info
-    course: CourseResponse  # nested — returns full course info
+    course: CourseInEnrollmentResponse  # nested — reads from monolith courses table
     enrolled_at: datetime
     updated_at: datetime
 
