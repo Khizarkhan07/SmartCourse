@@ -29,6 +29,8 @@ services:
       DATABASE_URL: postgresql+asyncpg://identity_user:identity_pass@identity-db:5432/identity_db
       DATABASE_URL_SYNC: postgresql+psycopg2://identity_user:identity_pass@identity-db:5432/identity_db
       REDIS_URL: redis://redis:6379/0
+      KAFKA_BROKERS: kafka:29092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
     depends_on:
       identity-db:
         condition: service_healthy

@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REDIS_URL: str = "redis://localhost:6379/0"
+    KAFKA_BROKERS: str = "localhost:9092"
+    SCHEMA_REGISTRY_URL: str = "http://localhost:8081"
 
     class Config:
         env_file = ".env"

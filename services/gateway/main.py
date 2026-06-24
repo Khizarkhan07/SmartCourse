@@ -16,22 +16,29 @@ logger = get_logger(__name__)
 app = FastAPI(title=settings.SERVICE_NAME)
 
 
+
+# These prefixes all route to the same multi-resource service (course-service).
+# We forward the FULL path so the service can discriminate by resource type
+# (/courses/{id} vs /modules/{id} vs /lessons/{id}).
+_FULL_PATH_PREFIXES = frozenset({"courses", "modules", "lessons"})
+
+
 def _resolve(path: str) -> tuple[str, str]:
     """Return (backend_base_url, forwarded_path) for a given incoming path.
 
     Routes by the first path segment. If the segment matches a service in
     ROUTE_TABLE the prefix is stripped and the request goes to that service.
+    Prefixes in _FULL_PATH_PREFIXES are forwarded with the full path intact
+    so multi-resource services can route by resource type.
     Anything else falls through to the monolith unchanged.
-
-    Examples:
-        /template/health  → (TEMPLATE_URL, /health)
-        /courses/         → (MONOLITH_URL, /courses/)
     """
     parts = path.lstrip("/").split("/", 1)
     prefix = parts[0]
     rest = "/" + parts[1] if len(parts) > 1 else "/"
 
     if prefix in ROUTE_TABLE:
+        if prefix in _FULL_PATH_PREFIXES:
+            return ROUTE_TABLE[prefix], "/" + path.lstrip("/")
         return ROUTE_TABLE[prefix], rest
 
     return settings.MONOLITH_URL, "/" + path.lstrip("/")

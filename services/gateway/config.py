@@ -31,5 +31,5 @@ ROUTE_TABLE: dict[str, str] = {
     "courses": settings.COURSE_URL,
     "modules": settings.COURSE_URL,
     "lessons": settings.COURSE_URL,
-    "publishing": settings.COURSE_URL,
+    # "publishing" routes to course-service once Chunk 18 moves workflows there
 }

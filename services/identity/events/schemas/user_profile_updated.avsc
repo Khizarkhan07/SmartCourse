@@ -1,0 +1,27 @@
+{
+  "type": "record",
+  "name": "UserProfileUpdatedEvent",
+  "namespace": "smartcourse.events",
+  "fields": [
+    {"name": "event_id",      "type": "string"},
+    {"name": "event_type",    "type": "string"},
+    {"name": "event_version", "type": "int"},
+    {"name": "occurred_at",   "type": "string"},
+    {"name": "producer",      "type": "string"},
+    {"name": "trace_id",      "type": "string"},
+    {
+      "name": "payload",
+      "type": {
+        "type": "record",
+        "name": "UserProfileUpdatedPayload",
+        "fields": [
+          {"name": "user_id",   "type": "string"},
+          {"name": "name",      "type": "string"},
+          {"name": "email",     "type": "string"},
+          {"name": "role",      "type": "string"},
+          {"name": "is_active", "type": "boolean"}
+        ]
+      }
+    }
+  ]
+}
