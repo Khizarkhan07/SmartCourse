@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     DATABASE_URL_SYNC: str = "postgresql+psycopg2://course_user:course_pass@localhost:5437/course_db"
     KAFKA_BROKERS: str = "localhost:9092"
     SCHEMA_REGISTRY_URL: str = "http://localhost:8081"
+    TEMPORAL_HOST: str = "localhost:7233"
+    COURSE_TASK_QUEUE: str = "smartcourse-course-service-queue"
 
     class Config:
         env_file = ".env"

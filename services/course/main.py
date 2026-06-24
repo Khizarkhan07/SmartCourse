@@ -7,6 +7,7 @@ from sqlalchemy import text
 from api.routes.courses import router as courses_router
 from api.routes.lessons import router as lessons_router
 from api.routes.modules import router as modules_router
+from api.routes.publishing import router as publishing_router
 from config import settings
 from core.exceptions import NotFoundError, PermissionDeniedError, ValidationError
 from core.logging import configure_logging, get_logger
@@ -48,5 +49,6 @@ async def health_check():
 app.include_router(courses_router)
 app.include_router(modules_router)
 app.include_router(lessons_router)
+app.include_router(publishing_router)
 
 FastAPIInstrumentor.instrument_app(app)

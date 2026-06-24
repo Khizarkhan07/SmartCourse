@@ -1,0 +1,27 @@
+{
+  "type": "record",
+  "name": "CoursePublishedEvent",
+  "namespace": "smartcourse.events",
+  "fields": [
+    {"name": "event_id",      "type": "string"},
+    {"name": "event_type",    "type": "string"},
+    {"name": "event_version", "type": "int"},
+    {"name": "occurred_at",   "type": "string"},
+    {"name": "producer",      "type": "string"},
+    {"name": "trace_id",      "type": "string"},
+    {
+      "name": "payload",
+      "type": {
+        "type": "record",
+        "name": "CoursePublishedPayload",
+        "fields": [
+          {"name": "course_id",     "type": "string"},
+          {"name": "instructor_id", "type": "string"},
+          {"name": "title",         "type": "string"},
+          {"name": "status",        "type": "string"},
+          {"name": "published_at",  "type": "string"}
+        ]
+      }
+    }
+  ]
+}
