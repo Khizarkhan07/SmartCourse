@@ -2,7 +2,6 @@ import threading
 
 from app.core.logging import configure_logging, get_logger
 from app.core.tracing import configure_tracing
-from app.events.consumers.enrollment_consumer import EnrollmentConsumer
 from app.events.consumers.course_consumer import CourseConsumer
 
 logger = get_logger(__name__)
@@ -14,7 +13,6 @@ def main() -> None:
     logger.info("starting kafka consumer runner")
 
     consumers = [
-        ("enrollment", EnrollmentConsumer()),
         ("course", CourseConsumer()),
     ]
 
@@ -28,7 +26,6 @@ def main() -> None:
     logger.info("all consumers running — press Ctrl+C to stop")
 
     try:
-        # Block the main thread. Daemon threads keep running as long as this stays alive.
         for t in threads:
             t.join()
     except KeyboardInterrupt:

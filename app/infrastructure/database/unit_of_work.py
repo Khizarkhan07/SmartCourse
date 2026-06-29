@@ -5,7 +5,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.infrastructure.database.session import AsyncSessionLocal
 from app.repositories.analytics_repository import AnalyticsRepository
 from app.repositories.course_repository import CourseRepository
-from app.repositories.enrollment_repository import EnrollmentRepository
 from app.repositories.lesson_repository import LessonRepository
 from app.repositories.module_repository import ModuleRepository
 from app.repositories.user_repository import UserRepository
@@ -22,7 +21,6 @@ class UnitOfWork:
         self.session: AsyncSession | None = None
         self.users: UserRepository | None = None
         self.courses: CourseRepository | None = None
-        self.enrollments: EnrollmentRepository | None = None
         self.modules: ModuleRepository | None = None
         self.lessons: LessonRepository | None = None
         self.analytics: AnalyticsRepository | None = None
@@ -31,7 +29,6 @@ class UnitOfWork:
         self.session = AsyncSessionLocal()
         self.users = UserRepository(self.session)
         self.courses = CourseRepository(self.session)
-        self.enrollments = EnrollmentRepository(self.session)
         self.modules = ModuleRepository(self.session)
         self.lessons = LessonRepository(self.session)
         self.analytics = AnalyticsRepository(self.session)

@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     ANALYTICS_URL: str = "http://smartcourse_analytics:8000"
     IDENTITY_URL: str = "http://smartcourse_identity:8000"
     COURSE_URL: str = "http://smartcourse_course:8000"
+    ENROLLMENT_URL: str = "http://smartcourse_enrollment:8000"
 
     class Config:
         env_file = ".env"
@@ -31,5 +32,5 @@ ROUTE_TABLE: dict[str, str] = {
     "courses": settings.COURSE_URL,
     "modules": settings.COURSE_URL,
     "lessons": settings.COURSE_URL,
-    # "publishing" routes to course-service once Chunk 18 moves workflows there
+    "enrollments": settings.ENROLLMENT_URL,
 }

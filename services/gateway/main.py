@@ -4,6 +4,8 @@ from fastapi.responses import Response
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 
+#nginix trafik
+
 from config import ROUTE_TABLE, settings
 from core.logging import configure_logging, get_logger
 from core.tracing import configure_tracing
@@ -20,7 +22,7 @@ app = FastAPI(title=settings.SERVICE_NAME)
 # These prefixes all route to the same multi-resource service (course-service).
 # We forward the FULL path so the service can discriminate by resource type
 # (/courses/{id} vs /modules/{id} vs /lessons/{id}).
-_FULL_PATH_PREFIXES = frozenset({"courses", "modules", "lessons"})
+_FULL_PATH_PREFIXES = frozenset({"courses", "modules", "lessons", "enrollments"})
 
 
 def _resolve(path: str) -> tuple[str, str]:

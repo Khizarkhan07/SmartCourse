@@ -2,16 +2,6 @@ import asyncio
 
 from prometheus_client import REGISTRY, Counter, Histogram, push_to_gateway
 
-enrollments_total = Counter(
-    "enrollments_total",
-    "Total number of enrollment workflows successfully started",
-)
-
-completions_total = Counter(
-    "completions_total",
-    "Total number of course completion workflows successfully started",
-)
-
 # 'workflow' label distinguishes which workflow type failed
 workflow_failures_total = Counter(
     "workflow_failures_total",
