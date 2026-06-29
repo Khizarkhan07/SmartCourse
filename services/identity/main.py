@@ -4,6 +4,7 @@ from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from sqlalchemy import text
 
 from api.routes.auth import router as auth_router
+from api.routes.internal import router as internal_router
 from api.routes.users import router as users_router
 from config import settings
 from core.logging import configure_logging, get_logger
@@ -29,5 +30,6 @@ async def health_check():
 
 app.include_router(auth_router)
 app.include_router(users_router)
+app.include_router(internal_router)
 
 FastAPIInstrumentor.instrument_app(app)

@@ -33,6 +33,26 @@ services:
       SCHEMA_REGISTRY_URL: http://schema-registry:8081
       TEMPORAL_HOST: host.docker.internal:7233
       COURSE_SERVICE_URL: http://course:8000
+      IDENTITY_SERVICE_URL: http://identity:8000
+    depends_on:
+      enrollment-db:
+        condition: service_healthy
+
+  enrollment-worker:
+    build: services/enrollment
+    container_name: smartcourse_enrollment_worker
+    command: python temporal_worker.py
+    env_file: .env
+    environment:
+      SERVICE_NAME: enrollment-worker
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      DATABASE_URL: postgresql+asyncpg://enrollment_user:enrollment_pass@enrollment-db:5432/enrollment_db
+      DATABASE_URL_SYNC: postgresql+psycopg2://enrollment_user:enrollment_pass@enrollment-db:5432/enrollment_db
+      KAFKA_BROKERS: kafka:29092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      TEMPORAL_HOST: host.docker.internal:7233
+      COURSE_SERVICE_URL: http://course:8000
+      IDENTITY_SERVICE_URL: http://identity:8000
     depends_on:
       enrollment-db:
         condition: service_healthy

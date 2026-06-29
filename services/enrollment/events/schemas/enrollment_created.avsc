@@ -1,0 +1,28 @@
+{
+  "type": "record",
+  "name": "EnrollmentCreatedEvent",
+  "namespace": "smartcourse.events",
+  "fields": [
+    {"name": "event_id", "type": "string"},
+    {"name": "event_type", "type": "string"},
+    {"name": "event_version", "type": "int"},
+    {"name": "occurred_at", "type": "string"},
+    {"name": "producer", "type": "string"},
+    {"name": "trace_id", "type": "string"},
+    {
+      "name": "payload",
+      "type": {
+        "type": "record",
+        "name": "EnrollmentCreatedPayload",
+        "fields": [
+          {"name": "enrollment_id", "type": "string"},
+          {"name": "student_id", "type": "string"},
+          {"name": "course_id", "type": "string"},
+          {"name": "status", "type": "string"},
+          {"name": "progress_percentage", "type": "int"},
+          {"name": "enrolled_at", "type": "string"}
+        ]
+      }
+    }
+  ]
+}

@@ -1,12 +1,22 @@
 import uuid
+from datetime import datetime, timezone
+
+from temporalio.exceptions import WorkflowAlreadyStartedError
+from temporalio.common import WorkflowIDReusePolicy
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from clients.course_client import CourseClient
+from config import settings
 from core.exceptions import NotFoundError, PermissionDeniedError, ValidationError
 from core.logging import get_logger
 from models.enrollment import Enrollment, EnrollmentStatus
 from models.lesson_completion import LessonCompletion
 from repositories.enrollment_repository import EnrollmentRepository
+from temporal import get_temporal_client
+from workflows.course_completion_workflow import (
+    CourseCompletionWorkflow,
+    CourseCompletionWorkflowInput,
+)
 
 logger = get_logger(__name__)
 
@@ -99,6 +109,7 @@ async def mark_lesson_complete(
     completed = await repo.count_completed_lessons(student_id, course_id)
     total = await course_client.count_course_lessons(course_id)
 
+    was_completed = enrollment.status == EnrollmentStatus.completed
     if total > 0:
         progress = int(round((completed / total) * 100))
         enrollment.progress_percentage = progress
@@ -117,8 +128,33 @@ async def mark_lesson_complete(
         total=total,
     )
 
-    # TODO: Chunk 24 — trigger CourseCompletionWorkflow via Temporal when progress == 100
+    newly_completed = (not was_completed) and (enrollment.status == EnrollmentStatus.completed)
+    if newly_completed:
+        await _trigger_course_completion(enrollment)
+
     return enrollment
+
+
+async def _trigger_course_completion(enrollment: Enrollment) -> None:
+    completed_at = datetime.now(timezone.utc).isoformat()
+    workflow_id = f"complete-{enrollment.id}"
+    client = await get_temporal_client()
+    try:
+        await client.start_workflow(
+            CourseCompletionWorkflow.run,
+            CourseCompletionWorkflowInput(
+                enrollment_id=str(enrollment.id),
+                student_id=str(enrollment.student_id),
+                course_id=str(enrollment.course_id),
+                completed_at=completed_at,
+            ),
+            id=workflow_id,
+            task_queue=settings.ENROLLMENT_TASK_QUEUE,
+            id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE,
+        )
+        logger.info("CourseCompletionWorkflow started", workflow_id=workflow_id)
+    except WorkflowAlreadyStartedError:
+        pass
 
 
 async def get_enrollment_progress(

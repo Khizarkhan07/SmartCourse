@@ -21,8 +21,8 @@ def upgrade() -> None:
     op.create_table(
         "enrollments",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("student_id", postgresql.UUID(as_uuid=True), nullable=False, index=True),
-        sa.Column("course_id", postgresql.UUID(as_uuid=True), nullable=False, index=True),
+        sa.Column("student_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("course_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column(
             "status",
             sa.Enum("enrolled", "dropped", "completed", name="enrollmentstatus"),

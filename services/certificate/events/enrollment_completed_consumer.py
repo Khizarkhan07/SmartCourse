@@ -62,7 +62,7 @@ class EnrollmentCompletedConsumer:
                     )
 
                     asyncio.run(self._issue_certificate(inner))
-
+#DLQ retries
                 except Exception as exc:
                     span.record_exception(exc)
                     logger.error(
