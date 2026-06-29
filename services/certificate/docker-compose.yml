@@ -52,5 +52,23 @@ services:
       certificate-db:
         condition: service_healthy
 
+  certificate-dlq-reprocessor:
+    build: services/certificate
+    container_name: smartcourse_certificate_dlq_reprocessor
+    command: python -m events.dlq_reprocessor_runner
+    env_file: .env
+    environment:
+      SERVICE_NAME: certificate-dlq-reprocessor
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      DATABASE_URL: postgresql+asyncpg://cert_user:cert_pass@certificate-db:5432/certificate_db
+      DATABASE_URL_SYNC: postgresql+psycopg2://cert_user:cert_pass@certificate-db:5432/certificate_db
+      KAFKA_BROKERS: kafka:29092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      DLQ_RETRY_INTERVAL_SECONDS: "60"
+      DLQ_MAX_ATTEMPTS: "3"
+    depends_on:
+      certificate-db:
+        condition: service_healthy
+
 volumes:
   certificate_db_data:

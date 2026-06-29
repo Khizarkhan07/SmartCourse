@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "dev-secret-key-change-in-production"
     ALGORITHM: str = "HS256"
     REDIS_URL: str = "redis://localhost:6379/0"
+    DLQ_RETRY_INTERVAL_SECONDS: int = 60
+    DLQ_MAX_ATTEMPTS: int = 3
 
     class Config:
         env_file = ".env"
