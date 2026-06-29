@@ -2,7 +2,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi import _rate_limit_exceeded_handler
@@ -14,26 +13,20 @@ from app.api.v1 import api_router
 from app.config import settings
 from app.core.limiter import limiter
 from app.core.tracing import configure_tracing
-from app.infrastructure.database import engine as db_engine
 
 configure_tracing()
 
 app = FastAPI(
     title="SmartCourse API",
-    description="Intelligent Course Delivery Platform — Backend",
-    version="1.0.0",
+    description="Monolith shell — all routes served by microservices via the gateway.",
+    version="2.0.0",
 )
 
-# Attach shared limiter to app state so routes can access it via Depends
 app.state.limiter = limiter
-
-# Returns 429 Too Many Requests when a limit is exceeded
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 
-# CORS — controls which frontend origins can call this API
 allowed_origins = [origin.strip() for origin in settings.CORS_ORIGINS.split(",")]
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
@@ -42,13 +35,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register routers
 app.include_router(api_router)
 
 
 @app.get("/health", tags=["Health"])
 async def health_check():
-    """Simple health check endpoint."""
     return {"status": "ok"}
 
 
@@ -58,10 +49,5 @@ async def metrics():
 
 
 register_exception_handlers(app)
-
-# HTTP request instrumentation — Prometheus metrics per route
 Instrumentator().instrument(app)
-
-# OTel instrumentation — traces every HTTP request and DB query
 FastAPIInstrumentor.instrument_app(app)
-SQLAlchemyInstrumentor().instrument(engine=db_engine.sync_engine)

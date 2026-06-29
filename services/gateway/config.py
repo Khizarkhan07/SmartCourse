@@ -7,7 +7,6 @@ class Settings(BaseSettings):
     OTEL_EXPORTER_OTLP_ENDPOINT: str = "http://localhost:4317"
 
     # Backend service URLs (Docker internal network)
-    MONOLITH_URL: str = "http://host.docker.internal:8000"
     TEMPLATE_URL: str = "http://smartcourse_template:8000"
     CERTIFICATE_URL: str = "http://smartcourse_certificate:8000"
     ANALYTICS_URL: str = "http://smartcourse_analytics:8000"

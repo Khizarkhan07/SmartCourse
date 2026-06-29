@@ -9,6 +9,5 @@ services:
     environment:
       SERVICE_NAME: gateway
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
-      MONOLITH_URL: http://host.docker.internal:8000
       CERTIFICATE_URL: http://smartcourse_certificate:8000
       ANALYTICS_URL: http://smartcourse_analytics:8000

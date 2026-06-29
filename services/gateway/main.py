@@ -1,5 +1,5 @@
 import httpx
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import Response
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
@@ -25,14 +25,14 @@ app = FastAPI(title=settings.SERVICE_NAME)
 _FULL_PATH_PREFIXES = frozenset({"courses", "modules", "lessons", "enrollments"})
 
 
-def _resolve(path: str) -> tuple[str, str]:
-    """Return (backend_base_url, forwarded_path) for a given incoming path.
+def _resolve(path: str) -> tuple[str, str] | None:
+    """Return (backend_base_url, forwarded_path) for a given incoming path, or None if unroutable.
 
     Routes by the first path segment. If the segment matches a service in
     ROUTE_TABLE the prefix is stripped and the request goes to that service.
     Prefixes in _FULL_PATH_PREFIXES are forwarded with the full path intact
     so multi-resource services can route by resource type.
-    Anything else falls through to the monolith unchanged.
+    Returns None for any path that doesn't match a known service.
     """
     parts = path.lstrip("/").split("/", 1)
     prefix = parts[0]
@@ -43,7 +43,7 @@ def _resolve(path: str) -> tuple[str, str]:
             return ROUTE_TABLE[prefix], "/" + path.lstrip("/")
         return ROUTE_TABLE[prefix], rest
 
-    return settings.MONOLITH_URL, "/" + path.lstrip("/")
+    return None
 
 
 @app.get("/health", tags=["Health"])
@@ -53,7 +53,10 @@ async def health_check():
 
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
 async def proxy(request: Request, path: str):
-    backend, forwarded_path = _resolve(path)
+    resolved = _resolve(path)
+    if resolved is None:
+        raise HTTPException(status_code=404, detail="No service registered for this path")
+    backend, forwarded_path = resolved
     url = f"{backend}{forwarded_path}"
 
     # Strip host header so the backend doesn't see the gateway's hostname
