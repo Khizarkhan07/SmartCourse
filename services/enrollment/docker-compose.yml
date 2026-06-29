@@ -45,6 +45,7 @@ services:
     env_file: .env
     environment:
       SERVICE_NAME: enrollment-worker
+      OTEL_SERVICE_NAME: enrollment-worker
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
       DATABASE_URL: postgresql+asyncpg://enrollment_user:enrollment_pass@enrollment-db:5432/enrollment_db
       DATABASE_URL_SYNC: postgresql+psycopg2://enrollment_user:enrollment_pass@enrollment-db:5432/enrollment_db

@@ -1,9 +1,12 @@
 import asyncio
 
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from temporalio.client import Client
 from temporalio.worker import Worker
 
 from config import settings
+from core.logging import configure_logging
+from core.tracing import configure_tracing
 from workflows.course_completion_workflow import (
     CourseCompletionWorkflow,
     emit_enrollment_completed_event_activity,
@@ -22,6 +25,10 @@ from workflows.enrollment_workflow import (
 
 
 async def main() -> None:
+    configure_logging()
+    configure_tracing()
+    HTTPXClientInstrumentor().instrument()
+
     client = await Client.connect(settings.TEMPORAL_HOST)
     async with Worker(
         client,
