@@ -5,6 +5,7 @@ from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from sqlalchemy import text
 
 from api.routes.courses import router as courses_router
+from api.routes.internal import router as internal_router
 from api.routes.lessons import router as lessons_router
 from api.routes.modules import router as modules_router
 from api.routes.publishing import router as publishing_router
@@ -50,5 +51,6 @@ app.include_router(courses_router)
 app.include_router(modules_router)
 app.include_router(lessons_router)
 app.include_router(publishing_router)
+app.include_router(internal_router)
 
 FastAPIInstrumentor.instrument_app(app)

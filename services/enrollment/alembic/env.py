@@ -9,9 +9,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from config import settings
 from database import Base
-# Model imports go here as they are added in future chunks:
-# import models.enrollment
-# import models.lesson_completion
+import models.enrollment
+import models.lesson_completion
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL_SYNC)

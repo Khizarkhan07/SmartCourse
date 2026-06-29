@@ -4,6 +4,7 @@ from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from sqlalchemy import text
 
+from api.routes.enrollments import router as enrollments_router
 from config import settings
 from core.exceptions import NotFoundError, PermissionDeniedError, ValidationError, ConflictError
 from core.logging import configure_logging, get_logger
@@ -46,5 +47,7 @@ async def health_check():
     logger.info("health check", service=settings.SERVICE_NAME)
     return {"status": "ok", "service": settings.SERVICE_NAME}
 
+
+app.include_router(enrollments_router)
 
 FastAPIInstrumentor.instrument_app(app)

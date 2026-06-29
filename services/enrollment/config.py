@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     SCHEMA_REGISTRY_URL: str = "http://localhost:8081"
     TEMPORAL_HOST: str = "localhost:7233"
     ENROLLMENT_TASK_QUEUE: str = "smartcourse-enrollment-service-queue"
+    COURSE_SERVICE_URL: str = "http://localhost:8005"
 
     class Config:
         env_file = ".env"
