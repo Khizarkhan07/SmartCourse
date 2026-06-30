@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     SCHEMA_REGISTRY_URL: str = "http://localhost:8081"
     TEMPORAL_HOST: str = "localhost:7233"
     COURSE_TASK_QUEUE: str = "smartcourse-course-service-queue"
+    DLQ_RETRY_INTERVAL_SECONDS: int = 60
+    DLQ_MAX_ATTEMPTS: int = 3
 
     class Config:
         env_file = ".env"

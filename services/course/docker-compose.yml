@@ -69,5 +69,23 @@ services:
       course-db:
         condition: service_healthy
 
+  course-dlq-reprocessor:
+    build: services/course
+    container_name: smartcourse_course_dlq_reprocessor
+    command: python -m events.dlq_reprocessor_runner
+    env_file: .env
+    environment:
+      SERVICE_NAME: course-dlq-reprocessor
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      DATABASE_URL: postgresql+asyncpg://course_user:course_pass@course-db:5432/course_db
+      DATABASE_URL_SYNC: postgresql+psycopg2://course_user:course_pass@course-db:5432/course_db
+      KAFKA_BROKERS: kafka:29092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      DLQ_RETRY_INTERVAL_SECONDS: "60"
+      DLQ_MAX_ATTEMPTS: "3"
+    depends_on:
+      course-db:
+        condition: service_healthy
+
 volumes:
   course_db_data:
