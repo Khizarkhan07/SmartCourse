@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     REDIS_URL: str = "redis://localhost:6379/0"
     TEMPORAL_HOST: str = "localhost:7233"
+    DLQ_RETRY_INTERVAL_SECONDS: int = 60
+    DLQ_MAX_ATTEMPTS: int = 3
 
     class Config:
         env_file = ".env"
