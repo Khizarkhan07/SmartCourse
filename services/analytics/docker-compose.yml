@@ -22,6 +22,14 @@ services:
     container_name: smartcourse_analytics
     ports:
       - "8003:8000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.analytics.loadbalancer.server.port=8000"
+      # /analytics/* → strip /analytics → /overview, /enrollments, ...
+      - "traefik.http.routers.analytics.rule=PathPrefix(`/analytics`)"
+      - "traefik.http.routers.analytics.service=analytics"
+      - "traefik.http.routers.analytics.middlewares=strip-analytics"
+      - "traefik.http.middlewares.strip-analytics.stripprefix.prefixes=/analytics"
     env_file: .env
     environment:
       SERVICE_NAME: analytics-service

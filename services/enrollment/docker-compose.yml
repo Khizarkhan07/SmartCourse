@@ -22,6 +22,13 @@ services:
     container_name: smartcourse_enrollment
     ports:
       - "8006:8000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.enrollment.loadbalancer.server.port=8000"
+      # /enrollments/* → full path forwarded (no strip)
+      # enrollment-service mounts its router at /enrollments internally
+      - "traefik.http.routers.enrollment.rule=PathPrefix(`/enrollments`)"
+      - "traefik.http.routers.enrollment.service=enrollment"
     env_file: .env
     environment:
       SERVICE_NAME: enrollment-service

@@ -1,5 +1,4 @@
 INFRA     := -f docker-compose.yml
-GATEWAY   := -f services/gateway/docker-compose.yml
 NOTIFY    := -f services/notification/docker-compose.yml
 CERT      := -f services/certificate/docker-compose.yml
 ANALYTICS := -f services/analytics/docker-compose.yml
@@ -7,7 +6,7 @@ IDENTITY  := -f services/identity/docker-compose.yml
 COURSE    := -f services/course/docker-compose.yml
 ENROLLMENT := -f services/enrollment/docker-compose.yml
 
-SERVICES := $(GATEWAY) $(NOTIFY) $(CERT) $(ANALYTICS) $(IDENTITY) $(COURSE) $(ENROLLMENT)
+SERVICES := $(NOTIFY) $(CERT) $(ANALYTICS) $(IDENTITY) $(COURSE) $(ENROLLMENT)
 
 # ── Shared infra only (Kafka, Redis, RabbitMQ, Jaeger, etc.) ──────────────────
 infra-up:

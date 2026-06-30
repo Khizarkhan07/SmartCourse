@@ -22,6 +22,13 @@ services:
     container_name: smartcourse_course
     ports:
       - "8005:8000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.course.loadbalancer.server.port=8000"
+      # /courses/*, /modules/*, /lessons/* → full path forwarded (no strip)
+      # course-service mounts routers at /courses, /modules, /lessons internally
+      - "traefik.http.routers.course.rule=PathPrefix(`/courses`) || PathPrefix(`/modules`) || PathPrefix(`/lessons`)"
+      - "traefik.http.routers.course.service=course"
     env_file: .env
     environment:
       SERVICE_NAME: course-service

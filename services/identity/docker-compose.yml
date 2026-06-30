@@ -22,6 +22,24 @@ services:
     container_name: smartcourse_identity
     ports:
       - "8004:8000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.identity.loadbalancer.server.port=8000"
+      # /auth/* → strip /auth → /login, /logout, ...
+      - "traefik.http.routers.identity-auth.rule=PathPrefix(`/auth`)"
+      - "traefik.http.routers.identity-auth.service=identity"
+      - "traefik.http.routers.identity-auth.middlewares=strip-auth"
+      - "traefik.http.middlewares.strip-auth.stripprefix.prefixes=/auth"
+      # /users/* → strip /users → /, /{id}, ...
+      - "traefik.http.routers.identity-users.rule=PathPrefix(`/users`)"
+      - "traefik.http.routers.identity-users.service=identity"
+      - "traefik.http.routers.identity-users.middlewares=strip-users"
+      - "traefik.http.middlewares.strip-users.stripprefix.prefixes=/users"
+      # /identity/* → strip /identity (generic fallback prefix)
+      - "traefik.http.routers.identity-prefix.rule=PathPrefix(`/identity`)"
+      - "traefik.http.routers.identity-prefix.service=identity"
+      - "traefik.http.routers.identity-prefix.middlewares=strip-identity"
+      - "traefik.http.middlewares.strip-identity.stripprefix.prefixes=/identity"
     env_file: .env
     environment:
       SERVICE_NAME: identity-service

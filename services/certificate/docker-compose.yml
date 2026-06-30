@@ -22,6 +22,14 @@ services:
     container_name: smartcourse_certificate
     ports:
       - "8002:8000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.certificate.loadbalancer.server.port=8000"
+      # /certificates/* → strip /certificates → /, /{id}/download
+      - "traefik.http.routers.certificate.rule=PathPrefix(`/certificates`)"
+      - "traefik.http.routers.certificate.service=certificate"
+      - "traefik.http.routers.certificate.middlewares=strip-certificates"
+      - "traefik.http.middlewares.strip-certificates.stripprefix.prefixes=/certificates"
     env_file: .env
     environment:
       SERVICE_NAME: certificate-service

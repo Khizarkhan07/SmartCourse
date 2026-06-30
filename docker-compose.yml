@@ -1,5 +1,26 @@
 services:
 
+  # ── Traefik API Gateway ──────────────────────────────────────────────────────
+  # Replaces the hand-rolled FastAPI reverse proxy.
+  # Routes by PathPrefix label on each service; StripPrefix middleware removes
+  # the gateway segment before forwarding (e.g. /analytics/overview → /overview).
+  # Dashboard: http://localhost:8088
+  # Traffic:   http://localhost:8080
+  traefik:
+    image: traefik:v2.11
+    container_name: smartcourse_traefik
+    command:
+      - "--api.insecure=true"
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "8080:80"    # main traffic — same host port as the old gateway
+      - "8088:8080"  # Traefik dashboard
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+
   # ── Kafka Stack ─────────────────────────────────────────────────────────────
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.0
