@@ -48,6 +48,7 @@ services:
     build: services/analytics
     container_name: smartcourse_analytics_consumer
     command: python -m events.runner
+    restart: on-failure
     env_file: .env
     environment:
       SERVICE_NAME: analytics-consumer
@@ -59,11 +60,14 @@ services:
     depends_on:
       analytics-db:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
 
   analytics-dlq-reprocessor:
     build: services/analytics
     container_name: smartcourse_analytics_dlq_reprocessor
     command: python -m events.dlq_runner
+    restart: on-failure
     env_file: .env
     environment:
       SERVICE_NAME: analytics-dlq-reprocessor
@@ -76,6 +80,8 @@ services:
       DLQ_MAX_ATTEMPTS: "3"
     depends_on:
       analytics-db:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
 
 volumes:

@@ -48,6 +48,7 @@ services:
     build: services/certificate
     container_name: smartcourse_certificate_consumer
     command: python -m events.enrollment_completed_consumer_runner
+    restart: on-failure
     env_file: .env
     environment:
       SERVICE_NAME: certificate-consumer
@@ -59,11 +60,14 @@ services:
     depends_on:
       certificate-db:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
 
   certificate-dlq-reprocessor:
     build: services/certificate
     container_name: smartcourse_certificate_dlq_reprocessor
     command: python -m events.dlq_reprocessor_runner
+    restart: on-failure
     env_file: .env
     environment:
       SERVICE_NAME: certificate-dlq-reprocessor
@@ -76,6 +80,8 @@ services:
       DLQ_MAX_ATTEMPTS: "3"
     depends_on:
       certificate-db:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
 
 volumes:

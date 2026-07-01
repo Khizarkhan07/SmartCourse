@@ -49,6 +49,7 @@ services:
     build: services/enrollment
     container_name: smartcourse_enrollment_worker
     command: python temporal_worker.py
+    restart: on-failure
     env_file: .env
     environment:
       SERVICE_NAME: enrollment-worker
@@ -63,6 +64,8 @@ services:
       IDENTITY_SERVICE_URL: http://identity:8000
     depends_on:
       enrollment-db:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
 
 volumes:

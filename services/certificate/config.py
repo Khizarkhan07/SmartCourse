@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "dev-secret-key-change-in-production"
     ALGORITHM: str = "HS256"
     REDIS_URL: str = "redis://localhost:6379/0"
+    CONSUMER_MAX_RETRIES: int = 3
+    CONSUMER_BASE_RETRY_DELAY_SECONDS: int = 2
     DLQ_RETRY_INTERVAL_SECONDS: int = 60
     DLQ_MAX_ATTEMPTS: int = 3
 

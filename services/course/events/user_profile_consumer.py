@@ -15,8 +15,8 @@ tracer = trace.get_tracer(__name__)
 
 TOPIC = "user.profile_updated"
 GROUP_ID = "course-service-user-profile"
-MAX_RETRIES = 3
-_RETRY_DELAYS = [2, 4, 8]
+MAX_RETRIES = settings.CONSUMER_MAX_RETRIES
+_BASE_RETRY_DELAY = settings.CONSUMER_BASE_RETRY_DELAY_SECONDS
 
 
 class UserProfileConsumer:
@@ -51,23 +51,46 @@ class UserProfileConsumer:
             span.set_attribute("messaging.system", "kafka")
             span.set_attribute("messaging.destination", TOPIC)
 
+            # Decode once outside the retry loop — a corrupt payload is permanent.
+            # Retrying the same bytes against the same schema will always fail.
+            try:
+                result = decode(message.value)
+                payload = result["payload"].get("payload", {})
+            except Exception as exc:
+                span.record_exception(exc)
+                logger.error(
+                    "corrupt payload — skipping retries, sending straight to DLQ",
+                    offset=message.offset,
+                    partition=message.partition,
+                    error=str(exc),
+                )
+                self._dlq.send(
+                    original_topic=TOPIC,
+                    original_partition=message.partition,
+                    original_offset=message.offset,
+                    original_key=message.key,
+                    raw_value=message.value,
+                    group_id=GROUP_ID,
+                    failure_reason=f"corrupt payload: {exc}",
+                    retry_count=MAX_RETRIES,  # exhausted → reprocessor parks immediately
+                )
+                self._consumer.commit()
+                return
+
+            user_id = payload.get("user_id", "")
+            span.set_attribute("user.id", user_id)
+            logger.info(
+                "user.profile_updated received",
+                user_id=user_id,
+                role=payload.get("role"),
+                is_active=payload.get("is_active"),
+            )
+
+            # Retry loop covers only transient failures: DB down, network blip, etc.
             last_exc: Exception | None = None
 
             for attempt in range(MAX_RETRIES):
                 try:
-                    result = decode(message.value)
-                    payload = result["payload"].get("payload", {})
-                    user_id = payload.get("user_id", "")
-                    span.set_attribute("user.id", user_id)
-
-                    if attempt == 0:
-                        logger.info(
-                            "user.profile_updated received",
-                            user_id=user_id,
-                            role=payload.get("role"),
-                            is_active=payload.get("is_active"),
-                        )
-
                     upsert_profile(payload)
                     self._consumer.commit()
                     return
@@ -84,7 +107,7 @@ class UserProfileConsumer:
                         error=str(exc),
                     )
                     if remaining > 0:
-                        time.sleep(_RETRY_DELAYS[attempt])
+                        time.sleep(_BASE_RETRY_DELAY * (2 ** attempt))
 
             span.record_exception(last_exc)
             self._dlq.send(

@@ -15,8 +15,8 @@ tracer = trace.get_tracer(__name__)
 
 TOPIC = "enrollment.created"
 GROUP_ID = "analytics-service-enrollment-created"
-MAX_RETRIES = 3
-_RETRY_DELAYS = [2, 4, 8]
+MAX_RETRIES = settings.CONSUMER_MAX_RETRIES
+_BASE_RETRY_DELAY = settings.CONSUMER_BASE_RETRY_DELAY_SECONDS
 
 
 class EnrollmentCreatedConsumer:
@@ -51,23 +51,46 @@ class EnrollmentCreatedConsumer:
             span.set_attribute("messaging.system", "kafka")
             span.set_attribute("messaging.destination", TOPIC)
 
+            # Decode once outside the retry loop — a corrupt payload is permanent.
+            # Retrying the same bytes against the same schema will always fail.
+            try:
+                result = decode(message.value)
+                inner = result["payload"].get("payload", {})
+            except Exception as exc:
+                span.record_exception(exc)
+                logger.error(
+                    "corrupt payload — skipping retries, sending straight to DLQ",
+                    offset=message.offset,
+                    partition=message.partition,
+                    error=str(exc),
+                )
+                self._dlq.send(
+                    original_topic=TOPIC,
+                    original_partition=message.partition,
+                    original_offset=message.offset,
+                    original_key=message.key,
+                    raw_value=message.value,
+                    group_id=GROUP_ID,
+                    failure_reason=f"corrupt payload: {exc}",
+                    retry_count=MAX_RETRIES,  # exhausted → reprocessor parks immediately
+                )
+                self._consumer.commit()
+                return
+
+            enrollment_id = inner.get("enrollment_id", "")
+            span.set_attribute("enrollment.id", enrollment_id)
+            logger.info(
+                "enrollment.created received",
+                enrollment_id=enrollment_id,
+                student_id=inner.get("student_id"),
+                course_id=inner.get("course_id"),
+            )
+
+            # Retry loop covers only transient failures: DB down, network blip, etc.
             last_exc: Exception | None = None
 
             for attempt in range(MAX_RETRIES):
                 try:
-                    result = decode(message.value)
-                    inner = result["payload"].get("payload", {})
-                    enrollment_id = inner.get("enrollment_id", "")
-                    span.set_attribute("enrollment.id", enrollment_id)
-
-                    if attempt == 0:
-                        logger.info(
-                            "enrollment.created received",
-                            enrollment_id=enrollment_id,
-                            student_id=inner.get("student_id"),
-                            course_id=inner.get("course_id"),
-                        )
-
                     create_enrollment_fact(inner)
                     self._consumer.commit()
                     return
@@ -84,7 +107,7 @@ class EnrollmentCreatedConsumer:
                         error=str(exc),
                     )
                     if remaining > 0:
-                        time.sleep(_RETRY_DELAYS[attempt])
+                        time.sleep(_BASE_RETRY_DELAY * (2 ** attempt))
 
             span.record_exception(last_exc)
             self._dlq.send(

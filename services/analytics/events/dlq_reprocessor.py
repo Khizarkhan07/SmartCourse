@@ -1,4 +1,5 @@
 import time
+from datetime import datetime, timezone
 
 from kafka import KafkaConsumer, KafkaProducer
 from opentelemetry import trace
@@ -53,10 +54,27 @@ class _BaseDLQReprocessor:
             self._parking_producer.close()
             self._consumer.close()
 
+    def _wait(self, seconds: float) -> None:
+        """Wait while keeping Kafka heartbeat alive via pause()/poll()/resume()."""
+        assignment = self._consumer.assignment()
+        self._consumer.pause(*assignment)
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            self._consumer.poll(timeout_ms=1000)
+        self._consumer.resume(*assignment)
+
     def _handle(self, message) -> None:
         headers = {k: v.decode() for k, v in (message.headers or [])}
         prior_retries = int(headers.get("x-retry-count", "0"))
         attempt_number = prior_retries + 1
+
+        failed_at_str = headers.get("x-failed-at", "")
+        try:
+            failed_at = datetime.fromisoformat(failed_at_str)
+            elapsed = (datetime.now(timezone.utc) - failed_at).total_seconds()
+            remaining = max(0.0, RETRY_INTERVAL_SECONDS - elapsed)
+        except (ValueError, TypeError):
+            remaining = float(RETRY_INTERVAL_SECONDS)
 
         logger.info(
             "DLQ message received, waiting before retry",
@@ -64,11 +82,12 @@ class _BaseDLQReprocessor:
             partition=message.partition,
             offset=message.offset,
             prior_retries=prior_retries,
-            wait_seconds=RETRY_INTERVAL_SECONDS,
+            wait_seconds=remaining,
             original_failure=headers.get("x-failure-reason", "unknown"),
         )
 
-        time.sleep(RETRY_INTERVAL_SECONDS)
+        if remaining > 0:
+            self._wait(remaining)
 
         ctx = extract(headers)
         with tracer.start_as_current_span(

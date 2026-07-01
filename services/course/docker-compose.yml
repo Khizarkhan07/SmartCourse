@@ -47,6 +47,7 @@ services:
     build: services/course
     container_name: smartcourse_course_consumer
     command: python -m events.runner
+    restart: on-failure
     env_file: .env
     environment:
       SERVICE_NAME: course-consumer
@@ -58,11 +59,14 @@ services:
     depends_on:
       course-db:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
 
   course-worker:
     build: services/course
     container_name: smartcourse_course_worker
     command: python temporal_worker.py
+    restart: on-failure
     env_file: .env
     environment:
       SERVICE_NAME: course-worker
@@ -75,11 +79,14 @@ services:
     depends_on:
       course-db:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
 
   course-dlq-reprocessor:
     build: services/course
     container_name: smartcourse_course_dlq_reprocessor
     command: python -m events.dlq_reprocessor_runner
+    restart: on-failure
     env_file: .env
     environment:
       SERVICE_NAME: course-dlq-reprocessor
@@ -92,6 +99,8 @@ services:
       DLQ_MAX_ATTEMPTS: "3"
     depends_on:
       course-db:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
 
 volumes:
