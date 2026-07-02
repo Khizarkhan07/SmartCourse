@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smartcourse-kafka"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "kafka-python>=2.0.2",
+    "avro-python3>=1.10.2",
+    "opentelemetry-sdk>=1.24.0",
+    "pydantic-settings>=2.7.0",
+    "structlog>=24.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["smartcourse_kafka*"]

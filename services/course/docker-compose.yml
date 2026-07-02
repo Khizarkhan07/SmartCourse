@@ -18,7 +18,9 @@ services:
       retries: 5
 
   course:
-    build: services/course
+    build:
+      context: .
+      dockerfile: services/course/Dockerfile
     container_name: smartcourse_course
     ports:
       - "8005:8000"
@@ -44,7 +46,9 @@ services:
         condition: service_healthy
 
   course-consumer:
-    build: services/course
+    build:
+      context: .
+      dockerfile: services/course/Dockerfile
     container_name: smartcourse_course_consumer
     command: python -m events.runner
     restart: on-failure
@@ -63,7 +67,9 @@ services:
         condition: service_healthy
 
   course-worker:
-    build: services/course
+    build:
+      context: .
+      dockerfile: services/course/Dockerfile
     container_name: smartcourse_course_worker
     command: python temporal_worker.py
     restart: on-failure
@@ -83,7 +89,9 @@ services:
         condition: service_healthy
 
   course-dlq-reprocessor:
-    build: services/course
+    build:
+      context: .
+      dockerfile: services/course/Dockerfile
     container_name: smartcourse_course_dlq_reprocessor
     command: python -m events.dlq_reprocessor_runner
     restart: on-failure

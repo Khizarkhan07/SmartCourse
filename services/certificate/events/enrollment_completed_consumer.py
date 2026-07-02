@@ -7,7 +7,7 @@ from opentelemetry.propagate import extract
 
 from config import settings
 from core.logging import get_logger
-from events.avro_decoder import decode
+from smartcourse_kafka.avro_decoder import decode
 from events.certificate_issuer import issue_certificate
 from events.dlq_producer import DLQProducer
 

@@ -18,7 +18,9 @@ services:
       retries: 5
 
   analytics:
-    build: services/analytics
+    build:
+      context: .
+      dockerfile: services/analytics/Dockerfile
     container_name: smartcourse_analytics
     ports:
       - "8003:8000"
@@ -45,7 +47,9 @@ services:
         condition: service_healthy
 
   analytics-consumer:
-    build: services/analytics
+    build:
+      context: .
+      dockerfile: services/analytics/Dockerfile
     container_name: smartcourse_analytics_consumer
     command: python -m events.runner
     restart: on-failure
@@ -64,7 +68,9 @@ services:
         condition: service_healthy
 
   analytics-dlq-reprocessor:
-    build: services/analytics
+    build:
+      context: .
+      dockerfile: services/analytics/Dockerfile
     container_name: smartcourse_analytics_dlq_reprocessor
     command: python -m events.dlq_runner
     restart: on-failure
