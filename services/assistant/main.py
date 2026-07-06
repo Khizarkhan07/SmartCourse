@@ -1,0 +1,44 @@
+from fastapi import FastAPI
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+from sqlalchemy import text
+
+from config import settings
+from core.logging import configure_logging, get_logger
+from core.tracing import configure_tracing
+from database import engine
+
+configure_logging()
+configure_tracing()
+SQLAlchemyInstrumentor().instrument(engine=engine.sync_engine)
+
+logger = get_logger(__name__)
+
+app = FastAPI(title=settings.SERVICE_NAME)
+
+
+@app.get("/health", tags=["Health"])
+async def health_check():
+    """Liveness + readiness. Confirms the DB is reachable and that the
+    pgvector extension is installed — the foundation the rest of the
+    service is built on."""
+    async with engine.connect() as conn:
+        await conn.execute(text("SELECT 1"))
+        result = await conn.execute(
+            text("SELECT 1 FROM pg_extension WHERE extname = 'vector'")
+        )
+        pgvector_installed = result.first() is not None
+
+    logger.info(
+        "health check",
+        service=settings.SERVICE_NAME,
+        pgvector=pgvector_installed,
+    )
+    return {
+        "status": "ok",
+        "service": settings.SERVICE_NAME,
+        "pgvector": pgvector_installed,
+    }
+
+
+FastAPIInstrumentor.instrument_app(app)

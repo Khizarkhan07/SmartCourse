@@ -1,0 +1,50 @@
+services:
+
+  assistant-db:
+    # pgvector/pgvector ships Postgres 16 with the vector extension preinstalled.
+    image: pgvector/pgvector:pg16
+    container_name: smartcourse_assistant_db
+    environment:
+      POSTGRES_USER: assistant_user
+      POSTGRES_PASSWORD: assistant_pass
+      POSTGRES_DB: assistant_db
+    ports:
+      - "5439:5432"
+    volumes:
+      - assistant_db_data:/var/lib/postgresql/data
+      # Enables the vector extension on first init.
+      - ./services/assistant/init-db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U assistant_user -d assistant_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  assistant:
+    build: services/assistant
+    container_name: smartcourse_assistant
+    ports:
+      - "8007:8000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.assistant.loadbalancer.server.port=8000"
+      # /assistant/* → strip /assistant → /health, /ask, ...
+      - "traefik.http.routers.assistant.rule=PathPrefix(`/assistant`)"
+      - "traefik.http.routers.assistant.service=assistant"
+      - "traefik.http.routers.assistant.middlewares=strip-assistant"
+      - "traefik.http.middlewares.strip-assistant.stripprefix.prefixes=/assistant"
+    env_file: .env
+    environment:
+      SERVICE_NAME: assistant-service
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      DATABASE_URL: postgresql+asyncpg://assistant_user:assistant_pass@assistant-db:5432/assistant_db
+      DATABASE_URL_SYNC: postgresql+psycopg2://assistant_user:assistant_pass@assistant-db:5432/assistant_db
+      REDIS_URL: redis://redis:6379/0
+      KAFKA_BROKERS: kafka:29092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
+    depends_on:
+      assistant-db:
+        condition: service_healthy
+
+volumes:
+  assistant_db_data:

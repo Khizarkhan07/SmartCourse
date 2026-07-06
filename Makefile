@@ -5,8 +5,9 @@ ANALYTICS := -f services/analytics/docker-compose.yml
 IDENTITY  := -f services/identity/docker-compose.yml
 COURSE    := -f services/course/docker-compose.yml
 ENROLLMENT := -f services/enrollment/docker-compose.yml
+ASSISTANT := -f services/assistant/docker-compose.yml
 
-SERVICES := $(NOTIFY) $(CERT) $(ANALYTICS) $(IDENTITY) $(COURSE) $(ENROLLMENT)
+SERVICES := $(NOTIFY) $(CERT) $(ANALYTICS) $(IDENTITY) $(COURSE) $(ENROLLMENT) $(ASSISTANT)
 
 # ── Shared infra only (Kafka, Redis, RabbitMQ, Jaeger, etc.) ──────────────────
 infra-up:
