@@ -37,6 +37,9 @@ services:
     environment:
       SERVICE_NAME: assistant-service
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      # Tokenizer/model are baked into the image at build time; force offline so
+      # there are no HuggingFace hub calls at runtime (deterministic, no network).
+      HF_HUB_OFFLINE: "1"
       DATABASE_URL: postgresql+asyncpg://assistant_user:assistant_pass@assistant-db:5432/assistant_db
       DATABASE_URL_SYNC: postgresql+psycopg2://assistant_user:assistant_pass@assistant-db:5432/assistant_db
       REDIS_URL: redis://redis:6379/0

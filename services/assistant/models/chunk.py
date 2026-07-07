@@ -8,8 +8,9 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from database import Base
 
-# Dimension of OpenAI text-embedding-3-small. Must match the embedding model
-EMBEDDING_DIM = 1536
+# Output dimension of all-MiniLM-L6-v2. Must match the embedding model used at
+# query time — change the model and you must change this and re-embed. See §6.2.
+EMBEDDING_DIM = 384
 
 
 class Chunk(Base):

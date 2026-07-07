@@ -15,6 +15,19 @@ class Settings(BaseSettings):
     KAFKA_BROKERS: str = "localhost:9092"
     SCHEMA_REGISTRY_URL: str = "http://localhost:8081"
 
+    # Embeddings — self-hosted all-MiniLM-L6-v2 via fastembed (ONNX, no torch).
+    # EMBEDDING_DIM here must equal the chunks.embedding column dimension.
+    EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
+    EMBEDDING_DIM: int = 384
+    EMBEDDING_CACHE_DIR: str = "/app/.fastembed_cache"
+
+    # Chunking — sizes are in TOKENS, counted with the model's real tokenizer.
+    # Target stays under the model's 256-token hard cap (the model adds 2 special
+    # tokens at embed time, so 200 content tokens -> 202, safely under 256).
+    CHUNK_TARGET_TOKENS: int = 200
+    CHUNK_MAX_TOKENS: int = 256
+    CHUNK_OVERLAP_TOKENS: int = 30
+
     class Config:
         env_file = ".env"
 
